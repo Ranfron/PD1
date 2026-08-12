@@ -47,10 +47,12 @@ class PdfPowerApp extends StatelessWidget {
             color: Colors.white,
           ),
         ),
-        cardTheme: CardThemeData(
-          color: const Color(0xFF152238),
+        cardTheme: const CardTheme(
+          color: Color(0xFF152238),
           elevation: 0,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(16)),
+          ),
         ),
         elevatedButtonTheme: ElevatedButtonThemeData(
           style: ElevatedButton.styleFrom(
