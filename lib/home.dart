@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:gap/gap.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'tools.dart';
-import 'file_picker.dart';
 import 'viewer.dart';
 import 'merge.dart';
 import 'split.dart';
@@ -21,8 +19,6 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  int _selectedIndex = 0;
-
   final List<_ToolItem> _tools = const [
     _ToolItem(
       title: 'Open PDF',
@@ -110,7 +106,7 @@ class _HomePageState extends State<HomePage> {
         page = const SettingsPage();
         break;
       default:
-        page = const ToolsPage();
+        return;
     }
     Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => page),

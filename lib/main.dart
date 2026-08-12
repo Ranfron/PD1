@@ -34,7 +34,6 @@ class PdfPowerApp extends StatelessWidget {
           primary: const Color(0xFF42A5F5),
           secondary: const Color(0xFF00E5FF),
           surface: const Color(0xFF0F1C2E),
-          background: const Color(0xFF0A1628),
         ),
         scaffoldBackgroundColor: const Color(0xFF0A1628),
         textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme),
@@ -48,7 +47,7 @@ class PdfPowerApp extends StatelessWidget {
             color: Colors.white,
           ),
         ),
-        cardTheme: CardTheme(
+        cardTheme: CardThemeData(
           color: const Color(0xFF152238),
           elevation: 0,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),

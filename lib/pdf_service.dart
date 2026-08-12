@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:path/path.dart' as p;
@@ -82,7 +81,6 @@ class PdfService {
     required List<(int start, int end)> ranges,
   }) async {
     final results = <File>[];
-    final bytes = await source.readAsBytes();
     final base = p.basenameWithoutExtension(source.path);
 
     for (var i = 0; i < ranges.length; i++) {
@@ -185,18 +183,24 @@ class PdfService {
   }
 
   /// Create a simple text PDF (used by OCR / Convert).
-  static Future<File> textToPdf(String text, {<String, dynamic>? meta}) async {
+  static Future<File> textToPdf(
+    String text, {
+    Map<String, dynamic>? meta,
+  }) async {
     final doc = pw.Document();
+    final title = meta?['title']?.toString();
     doc.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4,
         margin: const pw.EdgeInsets.all(40),
         build: (ctx) => [
-          if (meta != null && meta['title'] != null)
+          if (title != null)
             pw.Header(
               level: 0,
-              child: pw.Text(meta['title'].toString(),
-                  style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+              child: pw.Text(
+                title,
+                style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold),
+              ),
             ),
           pw.Paragraph(
             text: text,
