@@ -153,7 +153,7 @@ class _SplitPageState extends State<SplitPage> {
                         title: Text(p.basename(f.path), style: GoogleFonts.inter(fontSize: 13)),
                         trailing: IconButton(
                           icon: const Icon(Icons.share),
-                          onPressed: () => Share.shareXFiles([XFile(f.path)]),
+                          onPressed: () => SharePlus.instance.share(ShareParams(files: [XFile(f.path)])),
                         ),
                       ),
                     )),

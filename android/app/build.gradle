@@ -1,6 +1,6 @@
 plugins {
     id "com.android.application"
-    id "kotlin-android"
+    id "org.jetbrains.kotlin.android"
     id "dev.flutter.flutter-gradle-plugin"
 }
 
@@ -24,7 +24,7 @@ if (flutterVersionName == null) {
 
 android {
     namespace "com.pdfpower.app"
-    compileSdk 35
+    compileSdk 36
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
@@ -38,7 +38,7 @@ android {
     defaultConfig {
         applicationId "com.pdfpower.app"
         minSdk 24
-        targetSdk 35
+        targetSdk 36
         versionCode flutterVersionCode.toInteger()
         versionName flutterVersionName
         multiDexEnabled true
@@ -75,15 +75,15 @@ dependencies {
     // MuPDF
     implementation 'com.artifex.mupdf:fitz:1.28.0'
     // ONNX Runtime for PP-OCR DET + REC
-    implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.21.1'
+    implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.24.3'
     // Official OpenCV Android AAR (Maven Central)
-    implementation 'org.opencv:opencv:4.9.0'
+    implementation 'org.opencv:opencv:4.13.0'
     // CameraX for document scanner
-    def camerax = "1.4.1"
+    def camerax = "1.5.3"
     implementation "androidx.camera:camera-core:$camerax"
     implementation "androidx.camera:camera-camera2:$camerax"
     implementation "androidx.camera:camera-lifecycle:$camerax"
     implementation "androidx.camera:camera-view:$camerax"
     // Coroutines for async OCR
-    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1"
+    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0"
 }

@@ -178,7 +178,7 @@ class _ConvertPageState extends State<ConvertPage> with SingleTickerProviderStat
                           ),
                           IconButton(
                             icon: const Icon(Icons.share),
-                            onPressed: () => Share.shareXFiles([XFile(_result!.path)]),
+                            onPressed: () => SharePlus.instance.share(ShareParams(files: [XFile(_result!.path)])),
                           ),
                         ],
                       ),

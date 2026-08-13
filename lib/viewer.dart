@@ -243,7 +243,7 @@ class _ViewerPageState extends State<ViewerPage> {
             ),
             IconButton(
               icon: const Icon(Icons.share_rounded),
-              onPressed: () => Share.shareXFiles([XFile(_file!.path)]),
+              onPressed: () => SharePlus.instance.share(ShareParams(files: [XFile(_file!.path)])),
             ),
             IconButton(
               icon: const Icon(Icons.open_in_new_rounded),

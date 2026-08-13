@@ -71,7 +71,7 @@ class _MergePageState extends State<MergePage> {
 
   Future<void> _shareResult() async {
     if (_result == null) return;
-    await Share.shareXFiles([XFile(_result!.path)]);
+    await SharePlus.instance.share(ShareParams(files: [XFile(_result!.path)]));
   }
 
   @override

@@ -166,7 +166,7 @@ class _ProToolsPageState extends State<ProToolsPage>
                       IconButton(
                         icon: const Icon(Icons.share),
                         onPressed: () =>
-                            Share.shareXFiles([XFile(_result!.path)]),
+                            SharePlus.instance.share(ShareParams(files: [XFile(_result!.path)])),
                       ),
                     ],
                   ),

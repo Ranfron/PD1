@@ -128,7 +128,7 @@ class _OcrPageState extends State<OcrPage> {
       setState(() => _processing = false);
       if (mounted) {
         PdfFilePicker.showResult(context, 'Saved as PDF');
-        await Share.shareXFiles([XFile(out.path)]);
+        await SharePlus.instance.share(ShareParams(files: [XFile(out.path)]));
       }
     } catch (e) {
       setState(() => _processing = false);

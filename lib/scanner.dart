@@ -417,7 +417,7 @@ class _ScannerPageState extends State<ScannerPage> with WidgetsBindingObserver {
                       IconButton(
                         icon: const Icon(Icons.share, color: Colors.white70),
                         onPressed: () =>
-                            Share.shareXFiles([XFile(_lastScan!.path)]),
+                            SharePlus.instance.share(ShareParams(files: [XFile(_lastScan!.path)])),
                       ),
                       IconButton(
                         icon: const Icon(

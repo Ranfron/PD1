@@ -143,7 +143,7 @@ class _AdvancedEditPageState extends State<AdvancedEditPage>
                 style: GoogleFonts.inter(fontSize: 13)),
             const Gap(8),
             ElevatedButton.icon(
-              onPressed: () => Share.shareXFiles([XFile(_result!.path)]),
+              onPressed: () => SharePlus.instance.share(ShareParams(files: [XFile(_result!.path)])),
               icon: const Icon(Icons.share, size: 18),
               label: const Text('Share'),
             ),

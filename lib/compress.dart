@@ -136,7 +136,7 @@ class _CompressPageState extends State<CompressPage> {
                       ),
                       const Gap(12),
                       ElevatedButton.icon(
-                        onPressed: () => Share.shareXFiles([XFile(_result!.path)]),
+                        onPressed: () => SharePlus.instance.share(ShareParams(files: [XFile(_result!.path)])),
                         icon: const Icon(Icons.share, size: 18),
                         label: const Text('Share'),
                       ),
