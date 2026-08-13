@@ -79,3 +79,21 @@ lib/
 ## License
 
 MIT – free for personal & commercial use.
+
+## Phase 3 — Real PaddleOCR-VL (optional)
+
+Native bridge validates GGUF files on `initialize()`. Full token inference needs:
+
+```bash
+cd android/app/src/main/cpp/third_party
+git clone --depth 1 https://github.com/ggerganov/llama.cpp.git
+```
+
+Then uncomment the `HAS_LLAMA` block in `CMakeLists.txt` and implement load/infer in `paddle_vl_stub.cpp`.
+
+Until then: models download + GGUF validation work; page OCR uses **ML Kit** object map after MuPDF render.
+
+
+## Native PaddleOCR-VL 1.6
+
+When GitHub Actions clones llama.cpp, the Android native layer builds llama.cpp + libmtmd and loads the PaddleOCR-VL GGUF text model together with its mmproj. Page analysis uses MTMD image decoding and the PaddleOCR-VL `Spotting:` task; failures return an empty object list so the existing ML Kit/MuPDF fallback remains active.

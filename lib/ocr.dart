@@ -459,7 +459,7 @@ class _PaddleModelSheetState extends State<_PaddleModelSheet> {
       if (mounted) {
         PdfFilePicker.showResult(
           context,
-          'Download failed (set model URL in code): $e',
+          'Download failed: $e',
           isError: true,
         );
       }
@@ -535,17 +535,16 @@ class _PaddleModelSheetState extends State<_PaddleModelSheet> {
             ),
             const Gap(6),
             Text(
-              'Optional advanced OCR. Not included in APK. '
-              'Download only if needed. Set real model URL in '
-              'paddle_model_manager.dart before downloading.',
+              'Optional advanced OCR (not in APK).\n'
+              'Q4+mmproj ≈ 1.1 GB. Stored in Documents/Pdf Power/Models/.',
               style: GoogleFonts.inter(fontSize: 12, color: Colors.white54),
             ),
             const Gap(16),
             // Shared mmproj
             ListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('Shared mmproj.gguf'),
-              subtitle: Text(_mmproj ? 'Installed' : 'Required for Paddle VL'),
+              title: const Text('Shared mmproj (~841 MB)'),
+              subtitle: Text(_mmproj ? 'Installed' : 'PaddleOCR-VL-1.6-mmproj.gguf · required'),
               trailing: _mmProgress >= 0
                   ? SizedBox(
                       width: 36,

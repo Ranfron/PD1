@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'storage.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'home.dart';
 import 'settings.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await AppStorage.ensureAccess();
+  await AppStorage.root(); // create Documents/Pdf Power tree
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,

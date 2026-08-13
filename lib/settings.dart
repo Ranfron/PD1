@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path_provider/path_provider.dart';
 import 'tools.dart';
+import 'storage.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -26,12 +27,12 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Future<void> _load() async {
     final prefs = await SharedPreferences.getInstance();
-    final dir = await getApplicationDocumentsDirectory();
+    final dir = await AppStorage.root();
     setState(() {
       _darkMode = prefs.getBool('darkMode') ?? true;
       _keepOriginal = prefs.getBool('keepOriginal') ?? true;
       _defaultQuality = prefs.getString('defaultQuality') ?? '70';
-      _outputPath = '${dir.path}/PDF_Power_Output';
+      _outputPath = dir.path;
     });
   }
 

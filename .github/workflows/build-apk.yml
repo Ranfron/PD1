@@ -1,55 +1,58 @@
-name: Build PDF Power APK
+name: Build APK (arm64-v8a)
 
 on:
   push:
     branches: [ main, master ]
   pull_request:
-    branches: [ main, master ]
   workflow_dispatch:
 
 jobs:
   build:
-    name: Build Release APK (arm64-v8a)
     runs-on: ubuntu-latest
-
+    timeout-minutes: 120
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Java 17
+      - name: Clone llama.cpp for native VL
+        run: |
+          mkdir -p android/app/src/main/cpp/third_party
+          if [ ! -f android/app/src/main/cpp/third_party/llama.cpp/CMakeLists.txt ]; then
+            git clone --depth 1 https://github.com/ggml-org/llama.cpp.git \
+              android/app/src/main/cpp/third_party/llama.cpp
+          fi
+          test -f android/app/src/main/cpp/third_party/llama.cpp/CMakeLists.txt
+          test -f android/app/src/main/cpp/third_party/llama.cpp/tools/mtmd/CMakeLists.txt
+          grep -q "PROJECTOR_TYPE_PADDLEOCR" android/app/src/main/cpp/third_party/llama.cpp/tools/mtmd/mtmd.cpp
+          grep -q "mtmd_init_from_file" android/app/src/main/cpp/third_party/llama.cpp/tools/mtmd/mtmd.h
+          cd android/app/src/main/cpp/third_party/llama.cpp
+          echo "llama.cpp commit: $(git rev-parse HEAD)"
+          echo "llama.cpp + MTMD + PaddleOCR projector OK"
+
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
-          java-version: '17'
+          distribution: temurin
+          java-version: 17
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.24.5'
-          channel: 'stable'
+          flutter-version: "3.24.5"
+          channel: stable
           cache: true
 
-      - name: Flutter doctor
-        run: flutter doctor -v
-
-      - name: Get dependencies
+      - name: Flutter pub get
         run: flutter pub get
 
-      - name: Analyze (non-blocking)
-        run: flutter analyze --no-fatal-infos || true
-
-      - name: Build APK (arm64-v8a only)
+      - name: Build release APK arm64
         run: flutter build apk --release --target-platform android-arm64
 
       - name: List APKs
-        run: |
-          echo "=== Generated APKs ==="
-          find build/app/outputs/flutter-apk -name "*.apk" -exec ls -lh {} \;
+        run: find build -name "*.apk" -type f
 
-      - name: Upload arm64-v8a APK
+      - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: pdf-power-apk-arm64
-          path: build/app/outputs/flutter-apk/app-release.apk
-          retention-days: 30
+          path: build/app/outputs/flutter-apk/*.apk
           if-no-files-found: error

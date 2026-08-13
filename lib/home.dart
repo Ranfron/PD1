@@ -10,6 +10,8 @@ import 'convert.dart';
 import 'ocr.dart';
 import 'annotate.dart';
 import 'settings.dart';
+import 'advanced_edit.dart';
+import 'pro_tools.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -70,6 +72,20 @@ class _HomePageState extends State<HomePage> {
       route: 'annotate',
     ),
     _ToolItem(
+      title: 'Advanced Edit',
+      subtitle: 'Protect, watermark, redact…',
+      icon: Icons.auto_fix_rounded,
+      color: Color(0xFFEC407A),
+      route: 'advanced',
+    ),
+    _ToolItem(
+      title: 'Pro Tools',
+      subtitle: 'Text, image, forms, sign',
+      icon: Icons.design_services_rounded,
+      color: Color(0xFF7E57C2),
+      route: 'pro',
+    ),
+    _ToolItem(
       title: 'Settings',
       subtitle: 'App preferences',
       icon: Icons.settings_rounded,
@@ -101,6 +117,12 @@ class _HomePageState extends State<HomePage> {
         break;
       case 'annotate':
         page = const AnnotatePage();
+        break;
+      case 'advanced':
+        page = const AdvancedEditPage();
+        break;
+      case 'pro':
+        page = const ProToolsPage();
         break;
       case 'settings':
         page = const SettingsPage();

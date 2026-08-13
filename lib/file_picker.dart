@@ -1,33 +1,26 @@
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
-import 'package:permission_handler/permission_handler.dart';
+import 'storage.dart';
 
 class PdfFilePicker {
-  /// Pick one or more PDF files.
   static Future<List<File>> pickPdfs({bool allowMultiple = false}) async {
+    await AppStorage.ensureAccess();
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['pdf'],
       allowMultiple: allowMultiple,
       withData: false,
     );
-
     if (result == null || result.files.isEmpty) return [];
-
-    final files = <File>[];
-    for (final f in result.files) {
-      if (f.path != null) {
-        files.add(File(f.path!));
-      }
-    }
-    return files;
+    return result.files
+        .where((f) => f.path != null)
+        .map((f) => File(f.path!))
+        .toList();
   }
 
-  /// Pick images (for convert / OCR).
   static Future<List<File>> pickImages({bool allowMultiple = true}) async {
+    await AppStorage.ensureAccess();
     final result = await FilePicker.platform.pickFiles(
       type: FileType.image,
       allowMultiple: allowMultiple,
@@ -40,43 +33,39 @@ class PdfFilePicker {
         .toList();
   }
 
-  /// Request storage permission (Android).
-  static Future<bool> ensureStoragePermission() async {
-    if (Platform.isAndroid) {
-      final status = await Permission.storage.request();
-      if (status.isGranted) return true;
-      // Android 13+
-      final photos = await Permission.photos.request();
-      final media = await Permission.mediaLibrary.request();
-      return photos.isGranted || media.isGranted || status.isGranted;
-    }
-    return true;
-  }
+  static Future<bool> ensureStoragePermission() => AppStorage.ensureAccess();
 
-  /// Get app documents directory for saving outputs.
-  static Future<Directory> getOutputDir() async {
-    final dir = await getApplicationDocumentsDirectory();
-    final out = Directory(p.join(dir.path, 'PDF_Power_Output'));
-    if (!await out.exists()) {
-      await out.create(recursive: true);
-    }
-    return out;
-  }
+  static Future<Directory> getOutputDir() => AppStorage.outputGeneral();
 
-  /// Generate a unique output path.
   static Future<String> uniqueOutputPath(String baseName, String ext) async {
-    final dir = await getOutputDir();
-    final timestamp = DateTime.now().millisecondsSinceEpoch;
-    final safeName = baseName.replaceAll(RegExp(r'[^\w\-.]'), '_');
-    return p.join(dir.path, '${safeName}_$timestamp.$ext');
+    return AppStorage.uniquePath(AppStorage.outputGeneral, baseName, ext);
   }
 
-  /// Show a simple snackbar result.
-  static void showResult(BuildContext context, String message, {bool isError = false}) {
+  static Future<String> uniqueMergedPath(String baseName) =>
+      AppStorage.uniquePath(AppStorage.outputMerged, baseName, 'pdf');
+
+  static Future<String> uniqueSplitPath(String baseName) =>
+      AppStorage.uniquePath(AppStorage.outputSplit, baseName, 'pdf');
+
+  static Future<String> uniqueCompressedPath(String baseName) =>
+      AppStorage.uniquePath(AppStorage.outputCompressed, baseName, 'pdf');
+
+  static Future<String> uniqueOcrPath(String baseName) =>
+      AppStorage.uniquePath(AppStorage.outputOcr, baseName, 'pdf');
+
+  static Future<String> uniqueConvertedPath(String baseName) =>
+      AppStorage.uniquePath(AppStorage.outputConverted, baseName, 'pdf');
+
+  static Future<String> uniqueEditedPath(String baseName) =>
+      AppStorage.uniquePath(AppStorage.outputEdited, baseName, 'pdf');
+
+  static void showResult(BuildContext context, String message,
+      {bool isError = false}) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: isError ? Colors.red.shade800 : const Color(0xFF1565C0),
+        backgroundColor:
+            isError ? Colors.red.shade800 : const Color(0xFF1565C0),
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
       ),

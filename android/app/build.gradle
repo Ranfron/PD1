@@ -61,6 +61,13 @@ android {
             useLegacyPackaging = true
         }
     }
+
+    // Optional native stub (arm64). Safe no-op analysis until llama.cpp linked.
+    externalNativeBuild {
+        cmake {
+            path "src/main/cpp/CMakeLists.txt"
+        }
+    }
 }
 
 flutter {

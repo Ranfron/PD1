@@ -180,7 +180,7 @@ class PdfService {
       );
     }
 
-    final outPath = await PdfFilePicker.uniqueOutputPath(name ?? 'images_to_pdf', 'pdf');
+    final outPath = await PdfFilePicker.uniqueConvertedPath(name ?? 'images_to_pdf');
     final out = File(outPath);
     await out.writeAsBytes(await doc.save());
     return out;
@@ -214,9 +214,8 @@ class PdfService {
       ),
     );
 
-    final outPath = await PdfFilePicker.uniqueOutputPath(
+    final outPath = await PdfFilePicker.uniqueOcrPath(
       meta?['name']?.toString() ?? 'text_export',
-      'pdf',
     );
     final out = File(outPath);
     await out.writeAsBytes(await doc.save());
