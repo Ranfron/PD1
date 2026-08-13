@@ -74,7 +74,7 @@ class _HomePageState extends State<HomePage> {
     _ToolItem(
       title: 'Advanced Edit',
       subtitle: 'Protect, watermark, redact…',
-      icon: Icons.auto_fix_rounded,
+      icon: Icons.auto_fix_high,
       color: Color(0xFFEC407A),
       route: 'advanced',
     ),
