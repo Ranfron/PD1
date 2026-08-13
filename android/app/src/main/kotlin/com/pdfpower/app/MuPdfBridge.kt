@@ -12,6 +12,7 @@ import com.artifex.mupdf.fitz.Rect
 import com.artifex.mupdf.fitz.Matrix
 import com.artifex.mupdf.fitz.Buffer
 import com.artifex.mupdf.fitz.PDFObject
+import com.artifex.mupdf.fitz.Point
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import java.util.concurrent.Executors
@@ -275,7 +276,7 @@ class MuPdfBridge : MethodChannel.MethodCallHandler {
         for (i in start until end) {
             val page = doc.loadPage(i)
             val st = page.toStructuredText()
-            sb.append(st.copy())
+            sb.append(st.copy(Point(-Float.MAX_VALUE, -Float.MAX_VALUE), Point(Float.MAX_VALUE, Float.MAX_VALUE)))
             if (i < end - 1) sb.append("\n\n")
             st.destroy()
             page.destroy()
@@ -313,7 +314,7 @@ class MuPdfBridge : MethodChannel.MethodCallHandler {
         for (p in start until end) {
             val pageObj = src.findPage(p)
             val cur = pageObj.get("Rotate")
-            val prev = if (cur != null && !cur.isNull) cur.asInt() else 0
+            val prev = if (cur != null && !cur.isNull && cur.isNumber) cur.asNumber().toInt() else 0
             pageObj.put("Rotate", (prev + rot) % 360)
         }
         src.save(outPath, "compress")
@@ -323,13 +324,12 @@ class MuPdfBridge : MethodChannel.MethodCallHandler {
     private fun addBlankPage(path: String, outPath: String, index: Int) {
         val srcDoc = Document.openDocument(path)
         val src = srcDoc as? PDFDocument ?: throw Exception("Not a PDF")
-        // Create empty page at end then we could reorder; insert blank via new page object
-        val mediabox = src.findPage(0).get("MediaBox")
-        val newPage = src.addPage(mediabox, 0, null as PDFObject?, "")
-        // insertPage position: -1 = end; for specific index use insertPage
-        if (index >= 0) {
-            // MuPDF insertPage(at, obj) — move last to index is complex; save with blank at end
-        }
+        // addPage creates the page object; insertPage puts it into the page tree.
+        val mediabox = src.findPage(0).bounds
+        val resources = src.newDictionary()
+        val newPage = src.addPage(mediabox, 0, resources, "")
+        val insertAt = if (index < 0) -1 else index.coerceIn(0, src.countPages())
+        src.insertPage(insertAt, newPage)
         src.save(outPath, "compress")
         srcDoc.destroy()
     }
@@ -499,7 +499,7 @@ class MuPdfBridge : MethodChannel.MethodCallHandler {
         try { ann.setContents(value) } catch (_: Exception) {}
         try {
             // field name via underlying object when available
-            val obj = ann.obj
+            val obj = ann.getObject()
             if (obj != null) {
                 obj.put("T", pdf.newString(name))
                 obj.put("FT", pdf.newName("Tx"))
