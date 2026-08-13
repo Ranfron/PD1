@@ -309,29 +309,59 @@ class PpOcrEngine {
         val results = session.run(mapOf(inputName to tensor))
         tensor.close()
         val out = results[0].value
+        Log.d(TAG, "REC output=${describeTensor(out)} input=${resized.width}x${resized.height}")
         results.close()
         if (!resized.isRecycled && resized !== crop) resized.recycle()
 
         return ctcDecode(out)
     }
 
+    private fun describeTensor(v: Any?): String = when (v) {
+        is Array<*> -> {
+            val a = v.getOrNull(0)
+            if (a is Array<*>) "Array[${v.size},${a.size},${(a.getOrNull(0) as? FloatArray)?.size ?: 0}]"
+            else "Array[${v.size}]"
+        }
+        else -> v?.javaClass?.simpleName ?: "null"
+    }
+
     private fun ctcDecode(out: Any): Pair<String, Float> {
         return try {
-            val steps = when (out) {
-                is Array<*> -> {
-                    val a0 = out.getOrNull(0)
-                    if (a0 is Array<*>) {
-                        @Suppress("UNCHECKED_CAST")
-                        val raw = a0 as Array<FloatArray>
-                        if (raw.isNotEmpty() && raw.size > 1000 && raw[0].size < 1000) {
-                            val t = raw.size
-                            val c = raw[0].size
-                            Array(c) { i -> FloatArray(t) { j -> raw[j][i] } }
-                        } else raw
-                    } else return "" to 0f
-                }
-                else -> return "" to 0f
+            // PP-OCRv5 mobile REC uses CTC output. Depending on the ONNX exporter,
+            // the tensor can be [1,T,C] or [1,C,T]. Detect the orientation from
+            // the dictionary class count instead of using an arbitrary size cutoff.
+            val raw = when (out) {
+                is Array<*> -> out.getOrNull(0)
+                else -> null
             }
+
+            if (raw !is Array<*>) return "" to 0f
+
+            @Suppress("UNCHECKED_CAST")
+            val matrix = raw as Array<FloatArray>
+            if (matrix.isEmpty()) return "" to 0f
+
+            val classCount = charset.size + 1 // dictionary + CTC blank
+            val rows = matrix.size
+            val cols = matrix[0].size
+
+            val steps: Array<FloatArray> = when {
+                cols == classCount -> matrix                 // [T,C]
+                rows == classCount -> Array(cols) { t ->
+                    FloatArray(rows) { c -> matrix[c][t] }   // [C,T] -> [T,C]
+                }
+                else -> {
+                    // Some exporters expose an equivalent tensor with a small
+                    // class-count discrepancy. Prefer the dimension closest to
+                    // the expected CTC class count.
+                    if (kotlin.math.abs(cols - classCount) <= kotlin.math.abs(rows - classCount)) {
+                        matrix
+                    } else {
+                        Array(cols) { t -> FloatArray(rows) { c -> matrix[c][t] } }
+                    }
+                }
+            }
+
             decodeSteps(steps)
         } catch (t: Throwable) {
             Log.e(TAG, "ctc", t)
@@ -374,13 +404,19 @@ class PpOcrEngine {
     }
 
     private fun resizeRec(src: Bitmap): Bitmap {
+        // Official devanagari_PP-OCRv5_mobile_rec inference shape is [3, 48, 320].
+        // Keep the text aspect ratio, then right-pad with white pixels.
         val h = REC_IMG_H
-        val scale = h.toFloat() / src.height
-        var w = max(1, (src.width * scale).roundToInt())
-        if (w > REC_MAX_W) w = REC_MAX_W
-        // width multiple of 8 often preferred
-        w = max(8, (w + 7) / 8 * 8)
-        return Bitmap.createScaledBitmap(src, w, h, true)
+        val scale = h.toFloat() / src.height.coerceAtLeast(1)
+        val resizedW = (src.width * scale).roundToInt().coerceAtLeast(1)
+        val contentW = min(REC_MAX_W, resizedW)
+
+        val scaled = Bitmap.createScaledBitmap(src, contentW, h, true)
+        val out = Bitmap.createBitmap(REC_MAX_W, h, Bitmap.Config.ARGB_8888)
+        out.eraseColor(android.graphics.Color.WHITE)
+        Canvas(out).drawBitmap(scaled, 0f, 0f, null)
+        if (scaled !== src && !scaled.isRecycled) scaled.recycle()
+        return out
     }
 
     private fun cropQuad(src: Bitmap, pts: FloatArray): Bitmap {
