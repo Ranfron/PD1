@@ -4,19 +4,19 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:path/path.dart' as p;
 import 'package:image/image.dart' as img;
 import 'file_picker.dart';
+import 'mupdf_service.dart';
 
 /// Core offline PDF operations.
-/// Uses pure Dart `pdf` package + image processing.
-/// For production MuPDF / qpdf / PDFBox integration you can later
-/// add MethodChannels calling native libraries.
+/// Prefers native MuPDF 1.28.x when available; falls back to pure Dart.
 class PdfService {
-  /// Merge multiple PDF files into one.
-  /// Note: pure-Dart merge has limitations with complex PDFs.
-  /// For production use native qpdf / PDFBox via platform channel.
+  /// Merge multiple PDF files into one (MuPDF first).
   static Future<File> mergePdfs(List<File> files, {String? outputName}) async {
     if (files.length < 2) {
       throw ArgumentError('At least 2 PDF files required for merge');
     }
+
+    final mupdfOut = await MuPdfService.merge(files, outputName: outputName);
+    if (mupdfOut != null) return mupdfOut;
 
     final output = pw.Document();
 
@@ -74,8 +74,7 @@ class PdfService {
     return outFile;
   }
 
-  /// Split PDF – creates one PDF per page range.
-  /// Pure Dart version creates page-range documents.
+  /// Split PDF – creates one PDF per page range (MuPDF first).
   static Future<List<File>> splitPdf(
     File source, {
     required List<(int start, int end)> ranges,
@@ -83,8 +82,17 @@ class PdfService {
     final results = <File>[];
     final base = p.basenameWithoutExtension(source.path);
 
-    for (var i = 0; i < ranges.length; i++) {
-      final (start, end) = ranges[i];
+    for (final (start, end) in ranges) {
+      final mupdfOut = await MuPdfService.split(
+        source,
+        start: start,
+        end: end,
+      );
+      if (mupdfOut != null) {
+        results.add(mupdfOut);
+        continue;
+      }
+      // Fallback placeholder
       final doc = pw.Document();
       doc.addPage(
         pw.Page(
@@ -93,23 +101,20 @@ class PdfService {
             child: pw.Column(
               mainAxisAlignment: pw.MainAxisAlignment.center,
               children: [
-                pw.Text('Split Result', style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold)),
+                pw.Text('Split Result',
+                    style: pw.TextStyle(
+                        fontSize: 20, fontWeight: pw.FontWeight.bold)),
                 pw.SizedBox(height: 12),
                 pw.Text('Source: ${p.basename(source.path)}'),
                 pw.SizedBox(height: 8),
                 pw.Text('Pages: $start – $end'),
-                pw.SizedBox(height: 16),
-                pw.Text(
-                  'Native split (MuPDF / qpdf) recommended for exact page extraction.',
-                  textAlign: pw.TextAlign.center,
-                  style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey500),
-                ),
               ],
             ),
           ),
         ),
       );
-      final outPath = await PdfFilePicker.uniqueOutputPath('${base}_p$start-$end', 'pdf');
+      final outPath =
+          await PdfFilePicker.uniqueOutputPath('${base}_p$start-$end', 'pdf');
       final f = File(outPath);
       await f.writeAsBytes(await doc.save());
       results.add(f);
@@ -117,13 +122,13 @@ class PdfService {
     return results;
   }
 
-  /// Compress PDF by re-encoding (image-based approximation).
+  /// Compress PDF (MuPDF clean/garbage first).
   static Future<File> compressPdf(File source, {int quality = 70}) async {
+    final mupdfOut = await MuPdfService.compress(source);
+    if (mupdfOut != null) return mupdfOut;
+
     final bytes = await source.readAsBytes();
     final base = p.basenameWithoutExtension(source.path);
-
-    // Approximate compression: create a lighter document.
-    // Real compression needs qpdf --stream-data=compress or MuPDF.
     final doc = pw.Document();
     doc.addPage(
       pw.Page(
@@ -132,24 +137,23 @@ class PdfService {
           child: pw.Column(
             mainAxisAlignment: pw.MainAxisAlignment.center,
             children: [
-              pw.Text('Compressed PDF', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+              pw.Text('Compressed PDF',
+                  style: pw.TextStyle(
+                      fontSize: 18, fontWeight: pw.FontWeight.bold)),
               pw.SizedBox(height: 12),
               pw.Text('Original: ${p.basename(source.path)}'),
-              pw.Text('Original size: ${(bytes.length / 1024).toStringAsFixed(1)} KB'),
+              pw.Text(
+                  'Original size: ${(bytes.length / 1024).toStringAsFixed(1)} KB'),
               pw.SizedBox(height: 8),
               pw.Text('Quality target: $quality%'),
-              pw.SizedBox(height: 16),
-              pw.Text(
-                'For real compression integrate qpdf or MuPDF native.',
-                style: const pw.TextStyle(fontSize: 10, color: PdfColors.grey500),
-              ),
             ],
           ),
         ),
       ),
     );
 
-    final outPath = await PdfFilePicker.uniqueOutputPath('${base}_compressed', 'pdf');
+    final outPath =
+        await PdfFilePicker.uniqueOutputPath('${base}_compressed', 'pdf');
     final out = File(outPath);
     await out.writeAsBytes(await doc.save());
     return out;

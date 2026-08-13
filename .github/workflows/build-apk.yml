@@ -9,7 +9,7 @@ on:
 
 jobs:
   build:
-    name: Build Release APK
+    name: Build Release APK (arm64-v8a)
     runs-on: ubuntu-latest
 
     steps:
@@ -38,26 +38,18 @@ jobs:
       - name: Analyze (non-blocking)
         run: flutter analyze --no-fatal-infos || true
 
-      - name: Build APK (release)
-        run: flutter build apk --release --split-per-abi
+      - name: Build APK (arm64-v8a only)
+        run: flutter build apk --release --target-platform android-arm64
 
       - name: List APKs
         run: |
           echo "=== Generated APKs ==="
           find build/app/outputs/flutter-apk -name "*.apk" -exec ls -lh {} \;
 
-      - name: Upload APK artifacts
+      - name: Upload arm64-v8a APK
         uses: actions/upload-artifact@v4
         with:
-          name: pdf-power-apk
-          path: |
-            build/app/outputs/flutter-apk/*.apk
-          retention-days: 30
-
-      - name: Upload universal APK (if exists)
-        uses: actions/upload-artifact@v4
-        with:
-          name: pdf-power-apk-universal
+          name: pdf-power-apk-arm64
           path: build/app/outputs/flutter-apk/app-release.apk
-          if-no-files-found: ignore
           retention-days: 30
+          if-no-files-found: error

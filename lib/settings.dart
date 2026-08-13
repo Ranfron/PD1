@@ -137,8 +137,9 @@ class _SettingsPageState extends State<SettingsPage> {
                   const Gap(16),
                   const Text(
                     'Advanced offline PDF editor.\n'
-                    'Architecture: Flutter UI + pdfrx viewer + pure-Dart PDF tools + ML Kit OCR.\n'
-                    'Native engines (MuPDF, qpdf, PDFBox, PaddleOCR) can be plugged in via platform channels for production-grade merge/split/compress/annotate.',
+                    'PDF engine: MuPDF 1.28.x (native fitz) + Dart fallback.\n'
+                    'OCR: ML Kit (default) + optional PaddleOCR-VL-1.6.\n'
+                    'Viewer: pdfrx · License note: MuPDF is AGPL.',
                     style: TextStyle(fontSize: 13, color: Colors.white60, height: 1.45),
                   ),
                   const Gap(12),
