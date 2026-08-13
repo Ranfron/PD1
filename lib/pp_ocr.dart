@@ -97,13 +97,39 @@ class PpOcr {
       final engine = '${decoded['engine'] ?? ''}';
       final list = decoded['objects'];
       if (engine != 'pp_ocr' || list is! List || list.isEmpty) return null;
-      return list
+      final objects = list
           .whereType<Map>()
           .map((e) => PdfRegionObject.fromJson(Map<String, dynamic>.from(e)))
+          .where((o) => _usableText(o.text, o.confidence))
           .toList();
+      return objects.isEmpty ? null : objects;
     } catch (_) {
       return null;
     }
+  }
+
+  static bool _usableText(String text, double confidence) {
+    final t = text.trim();
+    if (t.isEmpty || confidence < 0.35) return false;
+    final chars = t.runes.toList();
+    if (chars.isEmpty) return false;
+    var useful = 0;
+    var symbols = 0;
+    for (final r in chars) {
+      final latin = (r >= 0x41 && r <= 0x5A) || (r >= 0x61 && r <= 0x7A);
+      final digit = r >= 0x30 && r <= 0x39;
+      final devanagari = r >= 0x0900 && r <= 0x097F;
+      if (latin || digit || devanagari) {
+        useful++;
+      } else if (!(r == 0x20 || r == 0x09 || r == 0x0A ||
+          r == 0x2E || r == 0x2C || r == 0x3A || r == 0x3B ||
+          r == 0x2D || r == 0x2F || r == 0x28 || r == 0x29 ||
+          r == 0x25 || r == 0x26 || r == 0x27 || r == 0x22)) {
+        symbols++;
+      }
+    }
+    if (useful == 0) return false;
+    return symbols <= (chars.length * 0.45).floor();
   }
 
   static Future<void> unload() async {

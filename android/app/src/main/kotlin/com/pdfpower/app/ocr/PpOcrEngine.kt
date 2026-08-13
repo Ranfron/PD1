@@ -13,6 +13,12 @@ import android.graphics.Paint
 import android.util.Log
 import org.json.JSONArray
 import org.json.JSONObject
+import org.opencv.core.CvType
+import org.opencv.core.Mat
+import org.opencv.core.MatOfPoint
+import org.opencv.core.MatOfPoint2f
+import org.opencv.core.Point
+import org.opencv.imgproc.Imgproc
 import java.io.File
 import java.nio.FloatBuffer
 import kotlin.math.ceil
@@ -178,117 +184,172 @@ class PpOcrEngine {
         if (!scaled.isRecycled && scaled !== src) scaled.recycle()
         if (!padded.isRecycled) padded.recycle()
 
-        // Expect [1,1,H,W] or [1,H,W] probability map
-        val map = flattenDetOutput(out, ph, pw) ?: return emptyList()
-        return boxesFromMap(map, ph, pw, ratio, src.width, src.height)
+        val detMap = readDetMap(out) ?: return emptyList()
+        return boxesFromMap(
+            map = detMap.first,
+            mh = detMap.second,
+            mw = detMap.third,
+            inputW = pw,
+            inputH = ph,
+            ratio = ratio,
+            origW = src.width,
+            origH = src.height
+        )
     }
 
-    private fun flattenDetOutput(out: Any, h: Int, w: Int): FloatArray? {
-        val flat = FloatArray(h * w)
-        var pos = 0
-        fun visit(v: Any?) {
-            if (pos >= flat.size) return
-            when (v) {
-                is FloatArray -> {
-                    val n = min(v.size, flat.size - pos)
-                    v.copyInto(flat, pos, 0, n); pos += n
+    /**
+     * PP-OCR DB exports normally expose [1,1,H,W] (and some ONNX exports
+     * expose [1,H,W]). Do not assume the model output has the same spatial
+     * size as the input: DB heads can be downsampled.
+     */
+    private fun readDetMap(out: Any): Triple<FloatArray, Int, Int>? {
+        fun asFloatArray(v: Any?): FloatArray? = v as? FloatArray
+
+        if (out is Array<*> && out.size == 1) {
+            val a = out[0]
+            if (a is Array<*> && a.size == 1 && a[0] is Array<*>) {
+                val rows = a[0] as Array<*>
+                val h = rows.size
+                val first = rows.firstOrNull() as? FloatArray ?: return null
+                val w = first.size
+                if (h == 0 || w == 0) return null
+                val flat = FloatArray(h * w)
+                for (y in 0 until h) {
+                    val row = rows[y] as? FloatArray ?: return null
+                    if (row.size != w) return null
+                    row.copyInto(flat, y * w)
                 }
-                is Array<*> -> v.forEach { visit(it) }
+                return Triple(flat, h, w)
+            }
+            if (a is Array<*>) {
+                val rows = a
+                val h = rows.size
+                val first = rows.firstOrNull() as? FloatArray ?: return null
+                val w = first.size
+                if (h == 0 || w == 0) return null
+                val flat = FloatArray(h * w)
+                for (y in 0 until h) {
+                    val row = rows[y] as? FloatArray ?: return null
+                    if (row.size != w) return null
+                    row.copyInto(flat, y * w)
+                }
+                return Triple(flat, h, w)
             }
         }
-        visit(out)
-        return if (pos == flat.size) flat else null
+        // Fallback for a direct FloatArray is only safe when the expected
+        // input spatial size is known; use it as a last-resort same-size map.
+        return null
     }
 
     private fun boxesFromMap(
         map: FloatArray,
         mh: Int,
         mw: Int,
+        inputW: Int,
+        inputH: Int,
         ratio: Float,
         origW: Int,
         origH: Int
     ): List<DetBox> {
-        // Simple connected-component style box extraction on thresholded map.
-        // Good enough for documents; full DB unclip can be refined later.
-        val bin = BooleanArray(mh * mw)
-        for (i in map.indices) bin[i] = map[i] >= DET_THRESH
+        val prob = Mat(mh, mw, CvType.CV_32FC1)
+        prob.put(0, 0, map)
+        val binary = Mat()
+        Imgproc.threshold(prob, binary, DET_THRESH.toDouble(), 255.0, Imgproc.THRESH_BINARY)
+        val binary8 = Mat()
+        binary.convertTo(binary8, CvType.CV_8UC1)
 
-        val visited = BooleanArray(mh * mw)
-        val boxes = mutableListOf<DetBox>()
-        val qx = IntArray(mh * mw)
-        val qy = IntArray(mh * mw)
+        val contours = ArrayList<MatOfPoint>()
+        val hierarchy = Mat()
+        Imgproc.findContours(
+            binary8,
+            contours,
+            hierarchy,
+            Imgproc.RETR_LIST,
+            Imgproc.CHAIN_APPROX_SIMPLE
+        )
 
-        for (y in 0 until mh) {
-            for (x in 0 until mw) {
-                val idx = y * mw + x
-                if (!bin[idx] || visited[idx]) continue
-                var minX = x
-                var maxX = x
-                var minY = y
-                var maxY = y
-                var scoreSum = 0f
-                var count = 0
-                var qh = 0
-                var qt = 0
-                qx[qt] = x
-                qy[qt] = y
-                qt++
-                visited[idx] = true
-                while (qh < qt) {
-                    val cx = qx[qh]
-                    val cy = qy[qh]
-                    qh++
-                    scoreSum += map[cy * mw + cx]
-                    count++
-                    minX = min(minX, cx)
-                    maxX = max(maxX, cx)
-                    minY = min(minY, cy)
-                    maxY = max(maxY, cy)
-                    for (dy in -1..1) for (dx in -1..1) {
-                        if (dx == 0 && dy == 0) continue
-                        val nx = cx + dx
-                        val ny = cy + dy
-                        if (nx < 0 || ny < 0 || nx >= mw || ny >= mh) continue
-                        val nidx = ny * mw + nx
-                        if (visited[nidx] || !bin[nidx]) continue
-                        visited[nidx] = true
-                        qx[qt] = nx
-                        qy[qt] = ny
-                        qt++
-                    }
-                }
-                if (count < 16) continue
-                val meanScore = scoreSum / count
-                if (meanScore < BOX_THRESH) continue
+        val candidates = mutableListOf<DetBox>()
+        val xScale = inputW.toFloat() / mw.toFloat()
+        val yScale = inputH.toFloat() / mh.toFloat()
 
-                // expand by unclip ratio approx
-                val bw = maxX - minX + 1
-                val bh = maxY - minY + 1
-                val padX = ((bw * (UNCLIP_RATIO - 1f)) / 2f).roundToInt()
-                val padY = ((bh * (UNCLIP_RATIO - 1f)) / 2f).roundToInt()
-                minX = max(0, minX - padX)
-                minY = max(0, minY - padY)
-                maxX = min(mw - 1, maxX + padX)
-                maxY = min(mh - 1, maxY + padY)
-
-                // map back to original image coords
-                val x0 = (minX / ratio).coerceIn(0f, origW - 1f)
-                val y0 = (minY / ratio).coerceIn(0f, origH - 1f)
-                val x1 = (maxX / ratio).coerceIn(0f, origW - 1f)
-                val y1 = (maxY / ratio).coerceIn(0f, origH - 1f)
-                if (x1 - x0 < 4 || y1 - y0 < 4) continue
-                boxes.add(
-                    DetBox(
-                        floatArrayOf(
-                            x0, y0, x1, y0,
-                            x1, y1, x0, y1
-                        )
-                    )
-                )
+        for (contour in contours) {
+            if (candidates.size >= 3000) break
+            val area = Imgproc.contourArea(contour)
+            if (area < 16.0) {
+                contour.release()
+                continue
             }
+
+            // DB box score: mean probability inside the contour.
+            val mask = Mat.zeros(mh, mw, CvType.CV_8UC1)
+            Imgproc.drawContours(mask, listOf(contour), 0, org.opencv.core.Scalar(255.0), -1)
+            val mean = org.opencv.core.Core.mean(prob, mask).`val`[0]
+            mask.release()
+            if (mean < BOX_THRESH) {
+                contour.release()
+                continue
+            }
+
+            val points2f = MatOfPoint2f(*contour.toArray().map { Point(it.x, it.y) }.toTypedArray())
+            val rect = Imgproc.minAreaRect(points2f)
+            points2f.release()
+            val center = rect.center
+            val sizeW = (rect.size.width * UNCLIP_RATIO).coerceAtLeast(4.0)
+            val sizeH = (rect.size.height * UNCLIP_RATIO).coerceAtLeast(4.0)
+            val expanded = MatOfPoint2f(
+                Point(center.x - sizeW / 2, center.y - sizeH / 2),
+                Point(center.x + sizeW / 2, center.y - sizeH / 2),
+                Point(center.x + sizeW / 2, center.y + sizeH / 2),
+                Point(center.x - sizeW / 2, center.y + sizeH / 2)
+            )
+
+            // Restore the rectangle rotation.
+            val theta = Math.toRadians(rect.angle.toDouble())
+            val cosT = kotlin.math.cos(theta)
+            val sinT = kotlin.math.sin(theta)
+            val srcPts = expanded.toArray()
+            val ordered = FloatArray(8)
+            for (i in srcPts.indices) {
+                val dx = srcPts[i].x - center.x
+                val dy = srcPts[i].y - center.y
+                val rx = center.x + dx * cosT - dy * sinT
+                val ry = center.y + dx * sinT + dy * cosT
+                ordered[i * 2] = (rx * xScale / ratio).coerceIn(0.0, (origW - 1).toDouble()).toFloat()
+                ordered[i * 2 + 1] = (ry * yScale / ratio).coerceIn(0.0, (origH - 1).toDouble()).toFloat()
+            }
+            expanded.release()
+            contour.release()
+
+            val minX = min(min(ordered[0], ordered[2]), min(ordered[4], ordered[6]))
+            val maxX = max(max(ordered[0], ordered[2]), max(ordered[4], ordered[6]))
+            val minY = min(min(ordered[1], ordered[3]), min(ordered[5], ordered[7]))
+            val maxY = max(max(ordered[1], ordered[3]), max(ordered[5], ordered[7]))
+            if (maxX - minX < 4f || maxY - minY < 4f) continue
+
+            candidates.add(DetBox(orderQuad(ordered)))
         }
-        // sort top-to-bottom, left-to-right
-        return boxes.sortedWith(compareBy({ it.points[1] }, { it.points[0] }))
+
+        hierarchy.release()
+        prob.release()
+        binary.release()
+        binary8.release()
+
+        return candidates.sortedWith(compareBy({ it.points[1] }, { it.points[0] }))
+    }
+
+    private fun orderQuad(p: FloatArray): FloatArray {
+        val pts = (0 until 4).map { Point(p[it * 2].toDouble(), p[it * 2 + 1].toDouble()) }
+        val tl = pts.minBy { it.x + it.y }
+        val br = pts.maxBy { it.x + it.y }
+        val remaining = pts.filter { it !== tl && it !== br }
+        val tr = remaining.minBy { it.y - it.x }
+        val bl = remaining.maxBy { it.y - it.x }
+        return floatArrayOf(
+            tl.x.toFloat(), tl.y.toFloat(),
+            tr.x.toFloat(), tr.y.toFloat(),
+            br.x.toFloat(), br.y.toFloat(),
+            bl.x.toFloat(), bl.y.toFloat()
+        )
     }
 
     // ── Recognition ────────────────────────────────────────────

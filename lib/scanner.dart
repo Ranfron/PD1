@@ -1,3 +1,4 @@
+import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'dart:async';
 import 'dart:io';
 import 'package:camera/camera.dart';
@@ -217,19 +218,25 @@ class _ScannerPageState extends State<ScannerPage> with WidgetsBindingObserver {
     final f = _lastScan;
     if (f == null) return;
     setState(() => _busy = true);
+    TextRecognizer? recognizer;
     try {
       var text = await PpOcr.processImage(f);
+      var used = 'PP-OCR';
       if (text.trim().isEmpty) {
-        // Fallback path: open OCR page logic via empty → user can use OCR tool
-        text = '';
+        // Scanner fallback: the same mixed Hindi + English capable
+        // Devanagari ML Kit recognizer used by the main OCR screen.
+        recognizer = TextRecognizer(
+          script: TextRecognitionScript.devanagiri,
+        );
+        final result = await recognizer.processImage(InputImage.fromFile(f));
+        text = result.text;
+        used = 'ML Kit fallback';
       }
       if (mounted) {
         setState(() {
           _ocrText = text;
           _busy = false;
-          _hint = text.isEmpty
-              ? 'OCR empty — open OCR tool or install PP-OCR models'
-              : 'OCR done';
+          _hint = text.isEmpty ? 'No text found' : 'OCR done · $used';
         });
       }
     } catch (e) {
@@ -239,6 +246,8 @@ class _ScannerPageState extends State<ScannerPage> with WidgetsBindingObserver {
           _hint = 'OCR failed: $e';
         });
       }
+    } finally {
+      recognizer?.close();
     }
   }
 

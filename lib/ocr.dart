@@ -88,8 +88,8 @@ class _OcrPageState extends State<OcrPage> {
       if (wantPp && _ppOcrReady) {
         text = await _runPpOcr(_image!);
         used = 'PP-OCR (Hindi+English)';
-        // Automatic fallback if PP-OCR returns empty
-        if (text.trim().isEmpty) {
+        // Reject obvious non-script garbage before accepting PP-OCR output.
+        if (!_usableOcrText(text)) {
           text = await _runMlKit(_image!);
           used = 'ML Kit (fallback)';
         }
@@ -112,6 +112,28 @@ class _OcrPageState extends State<OcrPage> {
         PdfFilePicker.showResult(context, 'OCR failed: $e', isError: true);
       }
     }
+  }
+
+  bool _usableOcrText(String text) {
+    final t = text.trim();
+    if (t.isEmpty) return false;
+    var useful = 0;
+    var suspicious = 0;
+    for (final r in t.runes) {
+      final latin = (r >= 0x41 && r <= 0x5A) || (r >= 0x61 && r <= 0x7A);
+      final digit = r >= 0x30 && r <= 0x39;
+      final devanagari = r >= 0x0900 && r <= 0x097F;
+      if (latin || digit || devanagari) {
+        useful++;
+      } else if (!(r == 0x20 || r == 0x0A || r == 0x0D ||
+          r == 0x09 || r == 0x2E || r == 0x2C || r == 0x3A ||
+          r == 0x3B || r == 0x2D || r == 0x2F || r == 0x28 ||
+          r == 0x29 || r == 0x25 || r == 0x26 || r == 0x27 ||
+          r == 0x22)) {
+        suspicious++;
+      }
+    }
+    return useful > 0 && suspicious <= (t.runes.length * 0.45).floor();
   }
 
   Future<void> _exportPdf() async {

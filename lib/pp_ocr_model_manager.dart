@@ -26,9 +26,9 @@ class PpOcrModelManager {
   static const detUrl =
       'https://huggingface.co/PaddlePaddle/PP-OCRv6_medium_det_onnx/resolve/main/inference.onnx';
   static const recUrl =
-      'https://raw.githubusercontent.com/PT-Perkasa-Pilar-Utama/ppu-paddle-ocr-models/main/recognition/multi/devanagari/v5/devanagari_PP-OCRv5_mobile_rec_infer.onnx';
+      'https://huggingface.co/OllmOne/PP-OCRv5/resolve/main/devanagari_pp-ocrv5_mobile_rec.onnx';
   static const dictUrl =
-      'https://raw.githubusercontent.com/PT-Perkasa-Pilar-Utama/ppu-paddle-ocr-models/main/recognition/multi/devanagari/v5/ppocrv5_devanagari_dict.txt';
+      'https://huggingface.co/OllmOne/PP-OCRv5/resolve/main/ppocrv5_devanagari_dict.txt';
 
   static Future<Directory> modelsDir() => AppStorage.modelsDir();
 
@@ -59,7 +59,13 @@ class PpOcrModelManager {
 
   static Future<bool> isDictInstalled() async {
     final f = File(await dictPath());
-    return f.existsSync() && f.lengthSync() > 100;
+    if (!f.existsSync() || f.lengthSync() <= 100) return false;
+    try {
+      final lines = await f.readAsLines();
+      return lines.length == 568 && lines.every((e) => e.isNotEmpty);
+    } catch (_) {
+      return false;
+    }
   }
 
   static Future<bool> isReady() async {
@@ -91,14 +97,23 @@ class PpOcrModelManager {
       }
       final total = res.contentLength ?? 0;
       final tmp = File('$destPath.part');
+      if (await tmp.exists()) await tmp.delete();
       final sink = tmp.openWrite();
       var received = 0;
-      await for (final chunk in res.stream) {
-        sink.add(chunk);
-        received += chunk.length;
-        if (total > 0) onProgress?.call(received / total);
+      try {
+        await for (final chunk in res.stream) {
+          sink.add(chunk);
+          received += chunk.length;
+          if (total > 0) onProgress?.call(received / total);
+        }
+      } finally {
+        await sink.close();
       }
-      await sink.close();
+      if (received < 1024) {
+        await tmp.delete();
+        throw Exception('Downloaded file is too small: $url');
+      }
+      if (await File(destPath).exists()) await File(destPath).delete();
       await tmp.rename(destPath);
     } finally {
       client.close();
