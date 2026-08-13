@@ -6,7 +6,7 @@ import 'storage.dart';
 class PdfFilePicker {
   static Future<List<File>> pickPdfs({bool allowMultiple = false}) async {
     await AppStorage.ensureAccess();
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['pdf'],
       allowMultiple: allowMultiple,
@@ -21,7 +21,7 @@ class PdfFilePicker {
 
   static Future<List<File>> pickImages({bool allowMultiple = true}) async {
     await AppStorage.ensureAccess();
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePicker.pickFiles(
       type: FileType.image,
       allowMultiple: allowMultiple,
       withData: false,

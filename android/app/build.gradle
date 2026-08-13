@@ -23,6 +23,7 @@ if (flutterVersionName == null) {
 }
 
 android {
+    ndkVersion = "28.2.13676358"
     namespace "com.pdfpower.app"
     compileSdk 36
 
