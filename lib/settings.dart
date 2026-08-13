@@ -139,7 +139,7 @@ class _SettingsPageState extends State<SettingsPage> {
                   const Text(
                     'Advanced offline PDF editor.\n'
                     'PDF engine: MuPDF 1.28.x (native fitz) + Dart fallback.\n'
-                    'OCR: ML Kit (default) + optional PaddleOCR-VL-1.6.\n'
+                    'OCR: ML Kit (default) + PP-OCRv6 Medium DET + Devanagari REC.\n'
                     'Viewer: pdfrx · License note: MuPDF is AGPL.',
                     style: TextStyle(fontSize: 13, color: Colors.white60, height: 1.45),
                   ),

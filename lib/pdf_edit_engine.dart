@@ -5,9 +5,9 @@ import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'mupdf_service.dart';
-import 'paddle_vl_ocr.dart';
+import 'pp_ocr.dart';
 import 'ocr_engine.dart';
-import 'paddle_model_manager.dart';
+import 'pp_ocr_model_manager.dart';
 
 enum PdfObjectType { text, image, table, stamp, signature, other }
 
@@ -101,7 +101,7 @@ class PageAnalysis {
   final double height;
   final List<PdfRegionObject> objects;
   final DateTime analyzedAt;
-  final String source; // mupdf | mlkit | paddle
+  final String source; // mupdf | mlkit | pp_ocr
 
   PageAnalysis({
     required this.page,
@@ -204,7 +204,7 @@ class PdfEditEngine {
     }
   }
 
-  /// Full analysis: page size → Paddle → render+ML Kit → MuPDF text.
+  /// Full analysis: page size → PP-OCR → render+ML Kit → MuPDF text.
   Future<PageAnalysis> analyzePage(
     int page, {
     bool force = false,
@@ -237,19 +237,19 @@ class PdfEditEngine {
     List<PdfRegionObject> objects = [];
     var source = 'mupdf';
 
-    // 1) Paddle structured
+    // 1) PP-OCR structured (DET + Devanagari REC)
     final engine = await OcrEngine.getSelected();
-    final paddleReady = await PaddleModelManager.isReady();
-    final wantPaddle = engine == OcrEngineType.paddleVl ||
-        (engine == OcrEngineType.auto && paddleReady);
-    if (wantPaddle && paddleReady) {
-      final structured = await PaddleVlOcr.analyzePageStructured(
+    final ppReady = await PpOcrModelManager.isReady();
+    final wantPp = engine == OcrEngineType.ppOcr ||
+        (engine == OcrEngineType.auto && ppReady);
+    if (wantPp && ppReady) {
+      final structured = await PpOcr.analyzePageStructured(
         pdfPath: doc.path,
         page: page,
       );
       if (structured != null && structured.isNotEmpty) {
         objects = structured;
-        source = 'paddle';
+        source = 'pp_ocr';
       }
     }
 
@@ -419,13 +419,13 @@ class PdfEditEngine {
 
   /// Dual-mode replace:
   /// - digital (mupdf source): FreeText local patch
-  /// - scanned (mlkit/paddle): redact old pixels region then FreeText overlay
+  /// - scanned (mlkit/pp_ocr): redact old pixels region then FreeText overlay
   Future<File?> replaceText(PdfRegionObject obj, String newText,
       {int page = 1}) async {
     final doc = _document;
     if (doc == null) return null;
     final src = _cache[page]?.source ?? 'mupdf';
-    final scanned = src == 'mlkit' || src == 'paddle';
+    final scanned = src == 'mlkit' || src == 'pp_ocr';
 
     File? working = doc;
     if (scanned) {

@@ -28,5 +28,3 @@ build/
 *.class
 .DS_Store
 
-# llama.cpp cloned by CI or locally
-android/app/src/main/cpp/third_party/llama.cpp/

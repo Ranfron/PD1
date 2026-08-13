@@ -1,99 +1,90 @@
 # PDF Power – Advanced Offline PDF Editor
 
-Full offline Flutter PDF editor APK.
+Full offline Flutter PDF editor + document scanner + PP-OCR.
 
 ## Features
 
 | Tool | Description |
 |------|-------------|
-| **Viewer** | High-quality PDF viewing (pdfrx / MuPDF-based) |
-| **Merge** | Combine multiple PDFs |
-| **Split** | Extract page ranges |
-| **Compress** | Reduce file size |
+| **Viewer** | High-quality PDF viewing (pdfrx / MuPDF) |
+| **Merge / Split / Compress** | Core PDF tools |
 | **Convert** | Images → PDF |
-| **OCR** | On-device text extraction (ML Kit) |
-| **Annotate** | Draw / highlight overlay |
-| **Settings** | Preferences & output folder |
+| **Scanner** | CameraX-style capture · document/card mode · auto enhance |
+| **OCR** | PP-OCRv6 Medium DET + Devanagari REC · ML Kit fallback |
+| **Annotate / Advanced / Pro** | Edit tools |
+| **Settings** | Preferences |
 
-**100% Offline** – no cloud, no telemetry. Files stay on device.
+**100% Offline** after models are on device.
 
-## Architecture
+## OCR (real ONNX inference)
 
 ```
-PDF POWER APP
-     │
-Flutter UI
-     │
-┌────┴────┐
-│         │
-PDF Engine   OCR Engine
-(pdfrx +     (ML Kit /
- pure Dart)   PaddleOCR ready)
-     │
-Android Native + Local Storage
+Image / PDF page
+      ↓
+PP-OCRv6 Medium DET   (ONNX Runtime, Kotlin)
+      ↓
+text boxes
+      ↓
+devanagari_PP-OCRv5_mobile_rec
+      ↓
+Hindi + English + Numbers
+      ↓
+JSON objects / plain text
+      ↓ (empty)
+ML Kit fallback
 ```
 
-Native engines (MuPDF, qpdf, PDFBox, PaddleOCR PP-OCRv6) can be added later via MethodChannels for production-grade binary operations.
+Implementation: `android/.../ocr/PpOcrEngine.kt`  
+Bridge: `PpOcrBridge.kt` · Flutter: `pp_ocr.dart`
 
-## Build on GitHub Actions
+Models (download in OCR → Manage PP-OCR Models):
 
-1. Push this repo to GitHub
-2. Go to **Actions** tab
-3. Run workflow **Build PDF Power APK** (or push to `main`)
-4. Download artifact **pdf-power-apk**
+| File | Role |
+|------|------|
+| `PP-OCRv6_medium_det.onnx` | Detection |
+| `devanagari_PP-OCRv5_mobile_rec.onnx` | Recognition |
+| `ppocrv5_devanagari_dict.txt` | Charset |
 
-Or build locally:
+Place under `Documents/Pdf Power/Models/`. Export with `paddle2onnx` if Hugging Face URLs differ.
+
+## Scanner
+
+```
+Camera / Gallery
+      ↓
+OpenCV DocumentDetector (contour + four-corner quad)
+      ↓
+AutoCaptureController (stable corners)
+      ↓
+PerspectiveCorrector + enhance / B&W
+      ↓
+same PP-OCR engine
+```
+
+- **Document mode** — A4, forms, certificates, receipts, notes  
+- **Card mode** — Aadhaar, PAN, licence, business card  
+
+Native: `scanner/DocumentDetector.kt`, `PerspectiveCorrector.kt`, `AutoCaptureController.kt`, `ScannerBridge.kt`  
+Flutter: `scanner.dart`, `scanner_engine.dart`
+
+OpenCV 4.9.0 is used for contour detection and true four-point perspective correction. The Flutter scanner API remains independent of the native implementation.
+
+## Build
 
 ```bash
 flutter pub get
-flutter build apk --release
+flutter build apk --release --target-platform android-arm64
 ```
 
-APK output: `build/app/outputs/flutter-apk/`
+GitHub Actions: workflow **Build APK (arm64-v8a)**.
 
 ## Requirements
 
 - Flutter 3.22+
-- Android SDK 24+
+- minSdk 24 · arm64-v8a
 - Java 17
-
-## Project Structure
-
-```
-lib/
-├── main.dart
-├── home.dart
-├── viewer.dart
-├── tools.dart
-├── file_picker.dart
-├── pdf_service.dart
-├── merge.dart
-├── split.dart
-├── compress.dart
-├── convert.dart
-├── ocr.dart
-├── annotate.dart
-└── settings.dart
-```
+- Camera permission for Scanner
 
 ## License
 
-MIT – free for personal & commercial use.
-
-## Phase 3 — Real PaddleOCR-VL (optional)
-
-Native bridge validates GGUF files on `initialize()`. Full token inference needs:
-
-```bash
-cd android/app/src/main/cpp/third_party
-git clone --depth 1 https://github.com/ggerganov/llama.cpp.git
-```
-
-Then uncomment the `HAS_LLAMA` block in `CMakeLists.txt` and implement load/infer in `paddle_vl_stub.cpp`.
-
-Until then: models download + GGUF validation work; page OCR uses **ML Kit** object map after MuPDF render.
-
-
-## Native PaddleOCR-VL 1.6
-
-When GitHub Actions clones llama.cpp, the Android native layer builds llama.cpp + libmtmd and loads the PaddleOCR-VL GGUF text model together with its mmproj. Page analysis uses MTMD image decoding and the PaddleOCR-VL `Spotting:` task; failures return an empty object list so the existing ML Kit/MuPDF fallback remains active.
+MIT

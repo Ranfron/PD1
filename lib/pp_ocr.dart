@@ -1,17 +1,19 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/services.dart';
-import 'paddle_model_manager.dart';
+import 'pp_ocr_model_manager.dart';
 import 'pdf_edit_engine.dart';
 import 'mupdf_service.dart';
 
-/// Flutter ↔ native bridge for optional PaddleOCR-VL-1.6.
-class PaddleVlOcr {
-  static const _channel = MethodChannel('com.pdfpower.app/paddle_vl');
+/// Flutter ↔ native bridge for PP-OCR pipeline:
+///   PP-OCRv6 Medium DET  →  text boxes
+///   devanagari_PP-OCRv5_mobile_rec  →  Hindi + English + numbers
+class PpOcr {
+  static const _channel = MethodChannel('com.pdfpower.app/pp_ocr');
   static bool _initialized = false;
 
   static Future<bool> isAvailable() async {
-    final paths = await PaddleModelManager.activePaths();
+    final paths = await PpOcrModelManager.activePaths();
     if (paths == null) return false;
     try {
       var ok = await _channel.invokeMethod<bool>('isReady') ?? false;
@@ -33,12 +35,13 @@ class PaddleVlOcr {
   }
 
   static Future<bool> initialize() async {
-    final paths = await PaddleModelManager.activePaths();
+    final paths = await PpOcrModelManager.activePaths();
     if (paths == null) return false;
     try {
       final ok = await _channel.invokeMethod<bool>('initialize', {
-        'modelPath': paths.model,
-        'mmprojPath': paths.mmproj,
+        'detPath': paths.det,
+        'recPath': paths.rec,
+        'dictPath': paths.dict,
       });
       _initialized = ok == true;
       return _initialized;
@@ -48,6 +51,7 @@ class PaddleVlOcr {
     }
   }
 
+  /// Plain text OCR for a single image file.
   static Future<String> processImage(File image) async {
     if (!_initialized) {
       final ok = await initialize();
@@ -63,7 +67,8 @@ class PaddleVlOcr {
     }
   }
 
-  /// Structured analysis: render PDF page → nativeAnalyzePage / empty → parse objects.
+  /// Structured page analysis (for advanced edit / region objects).
+  /// Renders PDF page via MuPDF then runs DET + REC.
   static Future<List<PdfRegionObject>?> analyzePageStructured({
     required String pdfPath,
     required int page,
@@ -73,7 +78,6 @@ class PaddleVlOcr {
       if (!ok) return null;
     }
     try {
-      // Prefer raster for VL models
       String? imagePath;
       final rendered = await MuPdfService.renderPage(
         File(pdfPath),
@@ -92,7 +96,7 @@ class PaddleVlOcr {
       if (decoded is! Map) return null;
       final engine = '${decoded['engine'] ?? ''}';
       final list = decoded['objects'];
-      if (engine != 'paddle_vl_spotting' || list is! List || list.isEmpty) return null;
+      if (engine != 'pp_ocr' || list is! List || list.isEmpty) return null;
       return list
           .whereType<Map>()
           .map((e) => PdfRegionObject.fromJson(Map<String, dynamic>.from(e)))

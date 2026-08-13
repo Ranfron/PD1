@@ -1,7 +1,8 @@
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// OCR engine selection. ML Kit is always available.
-enum OcrEngineType { auto, mlkit, paddleVl }
+/// PP-OCR = PP-OCRv6 Medium DET + devanagari_PP-OCRv5_mobile_rec (Hindi + English + numbers).
+enum OcrEngineType { auto, mlkit, ppOcr }
 
 class OcrEngine {
   static const _prefKey = 'ocr_engine';
@@ -26,19 +27,19 @@ class OcrEngine {
         return 'Auto';
       case OcrEngineType.mlkit:
         return 'ML Kit';
-      case OcrEngineType.paddleVl:
-        return 'PaddleOCR-VL-1.6';
+      case OcrEngineType.ppOcr:
+        return 'PP-OCR (Hindi + English)';
     }
   }
 
   static String subtitle(OcrEngineType t) {
     switch (t) {
       case OcrEngineType.auto:
-        return 'ML Kit by default · Paddle if installed';
+        return 'ML Kit by default · PP-OCR if models installed';
       case OcrEngineType.mlkit:
         return 'Fast · Lightweight · No download';
-      case OcrEngineType.paddleVl:
-        return 'Advanced · Offline AI · Needs model';
+      case OcrEngineType.ppOcr:
+        return 'PP-OCRv6 Medium DET + Devanagari REC · Offline';
     }
   }
 }

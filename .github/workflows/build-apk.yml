@@ -9,24 +9,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
-
-      - name: Clone llama.cpp for native VL
-        run: |
-          mkdir -p android/app/src/main/cpp/third_party
-          if [ ! -f android/app/src/main/cpp/third_party/llama.cpp/CMakeLists.txt ]; then
-            git clone --depth 1 https://github.com/ggml-org/llama.cpp.git \
-              android/app/src/main/cpp/third_party/llama.cpp
-          fi
-          test -f android/app/src/main/cpp/third_party/llama.cpp/CMakeLists.txt
-          test -f android/app/src/main/cpp/third_party/llama.cpp/tools/mtmd/CMakeLists.txt
-          grep -q "PROJECTOR_TYPE_PADDLEOCR" android/app/src/main/cpp/third_party/llama.cpp/tools/mtmd/mtmd.cpp
-          grep -q "mtmd_init_from_file" android/app/src/main/cpp/third_party/llama.cpp/tools/mtmd/mtmd.h
-          cd android/app/src/main/cpp/third_party/llama.cpp
-          echo "llama.cpp commit: $(git rev-parse HEAD)"
-          echo "llama.cpp + MTMD + PaddleOCR projector OK"
 
       - name: Setup Java
         uses: actions/setup-java@v4

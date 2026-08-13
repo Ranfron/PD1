@@ -7,7 +7,7 @@ import 'package:permission_handler/permission_handler.dart';
 ///
 /// Preferred tree (public Documents):
 ///   /Documents/Pdf Power/
-///     ├── Models/PaddleOCR-VL/   ← GGUF models
+///     ├── Models/   ← PP-OCR ONNX models
 ///     ├── Output/
 ///     │     ├── Merged/
 ///     │     ├── Split/
@@ -81,7 +81,7 @@ class AppStorage {
   }
 
   static Future<Directory> modelsDir() =>
-      _sub(['Models', 'PaddleOCR-VL']);
+      _sub(['Models']);
 
   static Future<Directory> outputMerged() => _sub(['Output', 'Merged']);
   static Future<Directory> outputSplit() => _sub(['Output', 'Split']);

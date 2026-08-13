@@ -8,6 +8,7 @@ import 'split.dart';
 import 'compress.dart';
 import 'convert.dart';
 import 'ocr.dart';
+import 'scanner.dart';
 import 'annotate.dart';
 import 'settings.dart';
 import 'advanced_edit.dart';
@@ -56,6 +57,13 @@ class _HomePageState extends State<HomePage> {
       icon: Icons.transform_rounded,
       color: Color(0xFF26C6DA),
       route: 'convert',
+    ),
+    _ToolItem(
+      title: 'Scanner',
+      subtitle: 'Camera · auto crop · enhance',
+      icon: Icons.camera_alt_rounded,
+      color: Color(0xFF29B6F6),
+      route: 'scanner',
     ),
     _ToolItem(
       title: 'OCR',
@@ -111,6 +119,9 @@ class _HomePageState extends State<HomePage> {
         break;
       case 'convert':
         page = const ConvertPage();
+        break;
+      case 'scanner':
+        page = const ScannerPage();
         break;
       case 'ocr':
         page = const OcrPage();

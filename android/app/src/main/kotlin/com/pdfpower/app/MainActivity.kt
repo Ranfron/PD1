@@ -1,5 +1,6 @@
 package com.pdfpower.app
 
+import com.pdfpower.app.scanner.ScannerBridge
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -9,10 +10,13 @@ class MainActivity : FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
         val messenger = flutterEngine.dartExecutor.binaryMessenger
 
-        val paddleChannel = MethodChannel(messenger, "com.pdfpower.app/paddle_vl")
-        paddleChannel.setMethodCallHandler(PaddleVLBridge(paddleChannel))
+        MethodChannel(messenger, "com.pdfpower.app/pp_ocr")
+            .setMethodCallHandler(PpOcrBridge(MethodChannel(messenger, "com.pdfpower.app/pp_ocr")))
 
         MethodChannel(messenger, "com.pdfpower.app/mupdf")
             .setMethodCallHandler(MuPdfBridge())
+
+        MethodChannel(messenger, "com.pdfpower.app/scanner")
+            .setMethodCallHandler(ScannerBridge())
     }
 }

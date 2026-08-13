@@ -10,8 +10,8 @@ import 'file_picker.dart';
 import 'pdf_service.dart';
 import 'tools.dart';
 import 'ocr_engine.dart';
-import 'paddle_model_manager.dart';
-import 'paddle_vl_ocr.dart';
+import 'pp_ocr_model_manager.dart';
+import 'pp_ocr.dart';
 
 class OcrPage extends StatefulWidget {
   const OcrPage({super.key});
@@ -26,7 +26,7 @@ class _OcrPageState extends State<OcrPage> {
   bool _processing = false;
   String _engineUsed = '';
   OcrEngineType _engine = OcrEngineType.auto;
-  bool _paddleReady = false;
+  bool _ppOcrReady = false;
 
   final TextRecognizer _recognizer =
       TextRecognizer(script: TextRecognitionScript.latin);
@@ -39,11 +39,11 @@ class _OcrPageState extends State<OcrPage> {
 
   Future<void> _loadEngine() async {
     final e = await OcrEngine.getSelected();
-    final ready = await PaddleModelManager.isReady();
+    final ready = await PpOcrModelManager.isReady();
     if (mounted) {
       setState(() {
         _engine = e;
-        _paddleReady = ready;
+        _ppOcrReady = ready;
       });
     }
   }
@@ -71,8 +71,8 @@ class _OcrPageState extends State<OcrPage> {
     return result.text;
   }
 
-  Future<String> _runPaddle(File image) async {
-    return PaddleVlOcr.processImage(image);
+  Future<String> _runPpOcr(File image) async {
+    return PpOcr.processImage(image);
   }
 
   Future<void> _runOcr() async {
@@ -82,13 +82,13 @@ class _OcrPageState extends State<OcrPage> {
       String text = '';
       String used = 'ML Kit';
 
-      final wantPaddle = _engine == OcrEngineType.paddleVl ||
-          (_engine == OcrEngineType.auto && _paddleReady);
+      final wantPp = _engine == OcrEngineType.ppOcr ||
+          (_engine == OcrEngineType.auto && _ppOcrReady);
 
-      if (wantPaddle && _paddleReady) {
-        text = await _runPaddle(_image!);
-        used = 'PaddleOCR-VL-1.6';
-        // Automatic fallback if Paddle returns empty
+      if (wantPp && _ppOcrReady) {
+        text = await _runPpOcr(_image!);
+        used = 'PP-OCR (Hindi+English)';
+        // Automatic fallback if PP-OCR returns empty
         if (text.trim().isEmpty) {
           text = await _runMlKit(_image!);
           used = 'ML Kit (fallback)';
@@ -180,7 +180,7 @@ class _OcrPageState extends State<OcrPage> {
                 const Gap(12),
                 ...OcrEngineType.values.map((t) {
                   final disabled =
-                      t == OcrEngineType.paddleVl && !_paddleReady;
+                      t == OcrEngineType.ppOcr && !_ppOcrReady;
                   return RadioListTile<OcrEngineType>(
                     value: t,
                     groupValue: _engine,
@@ -188,7 +188,7 @@ class _OcrPageState extends State<OcrPage> {
                     title: Text(OcrEngine.label(t)),
                     subtitle: Text(
                       disabled
-                          ? 'Not installed — download model first'
+                          ? 'Not installed — download models first'
                           : OcrEngine.subtitle(t),
                       style: TextStyle(
                         fontSize: 12,
@@ -214,7 +214,7 @@ class _OcrPageState extends State<OcrPage> {
                       _showModelManager();
                     },
                     icon: const Icon(Icons.download_for_offline_outlined),
-                    label: const Text('Manage Paddle Models'),
+                    label: const Text('Manage PP-OCR Models'),
                   ),
                 ),
               ],
@@ -233,7 +233,7 @@ class _OcrPageState extends State<OcrPage> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
       ),
-      builder: (ctx) => const _PaddleModelSheet(),
+      builder: (ctx) => const _PpOcrModelSheet(),
     );
     await _loadEngine();
   }
@@ -275,7 +275,7 @@ class _OcrPageState extends State<OcrPage> {
                 child: Row(
                   children: [
                     Icon(
-                      _paddleReady
+                      _ppOcrReady
                           ? Icons.smart_toy_outlined
                           : Icons.speed,
                       color: const Color(0xFF42A5F5),
@@ -285,7 +285,7 @@ class _OcrPageState extends State<OcrPage> {
                     Expanded(
                       child: Text(
                         'Engine: ${OcrEngine.label(_engine)}'
-                        '${_paddleReady ? ' · Paddle ready' : ' · ML Kit only'}',
+                        '${_ppOcrReady ? ' · PP-OCR ready' : ' · ML Kit only'}',
                         style: GoogleFonts.inter(
                           fontSize: 13,
                           color: Colors.white70,
@@ -399,21 +399,24 @@ class _OcrPageState extends State<OcrPage> {
   }
 }
 
-/// Bottom sheet for downloading / deleting PaddleOCR-VL models.
-class _PaddleModelSheet extends StatefulWidget {
-  const _PaddleModelSheet();
+/// Bottom sheet for downloading / deleting PP-OCR models
+/// (PP-OCRv6 Medium DET + devanagari_PP-OCRv5_mobile_rec).
+class _PpOcrModelSheet extends StatefulWidget {
+  const _PpOcrModelSheet();
 
   @override
-  State<_PaddleModelSheet> createState() => _PaddleModelSheetState();
+  State<_PpOcrModelSheet> createState() => _PpOcrModelSheetState();
 }
 
-class _PaddleModelSheetState extends State<_PaddleModelSheet> {
-  PaddleQuant _selected = PaddleQuant.q4Km;
-  bool _mmproj = false;
-  final Map<PaddleQuant, bool> _installed = {};
-  final Map<PaddleQuant, double> _progress = {};
-  double _mmProgress = -1;
+class _PpOcrModelSheetState extends State<_PpOcrModelSheet> {
+  bool _det = false;
+  bool _rec = false;
+  bool _dict = false;
+  double _detProgress = -1;
+  double _recProgress = -1;
+  double _dictProgress = -1;
   bool _busy = false;
+  int _usedBytes = 0;
 
   @override
   void initState() {
@@ -422,44 +425,46 @@ class _PaddleModelSheetState extends State<_PaddleModelSheet> {
   }
 
   Future<void> _refresh() async {
-    final sel = await PaddleModelManager.selectedQuant();
-    final mm = await PaddleModelManager.isMmprojInstalled();
-    final map = <PaddleQuant, bool>{};
-    for (final q in PaddleQuant.values) {
-      map[q] = await PaddleModelManager.isQuantInstalled(q);
-    }
+    final det = await PpOcrModelManager.isDetInstalled();
+    final rec = await PpOcrModelManager.isRecInstalled();
+    final dict = await PpOcrModelManager.isDictInstalled();
+    final used = await PpOcrModelManager.usedBytes();
     if (mounted) {
       setState(() {
-        _selected = sel;
-        _mmproj = mm;
-        _installed
-          ..clear()
-          ..addAll(map);
+        _det = det;
+        _rec = rec;
+        _dict = dict;
+        _usedBytes = used;
       });
     }
   }
 
-  Future<void> _downloadQuant(PaddleQuant q) async {
+  String _fmtMb(int bytes) {
+    if (bytes <= 0) return '0 MB';
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+
+  Future<void> _downloadDet() async {
     setState(() {
       _busy = true;
-      _progress[q] = 0;
+      _detProgress = 0;
     });
     try {
-      await PaddleModelManager.downloadQuant(
-        q,
+      await PpOcrModelManager.downloadDet(
         onProgress: (p) {
-          if (mounted) setState(() => _progress[q] = p);
+          if (mounted) setState(() => _detProgress = p);
         },
       );
-      await PaddleModelManager.setSelectedQuant(q);
       if (mounted) {
-        PdfFilePicker.showResult(context, '${q.label} downloaded');
+        PdfFilePicker.showResult(context, 'DET model downloaded');
       }
     } catch (e) {
       if (mounted) {
         PdfFilePicker.showResult(
           context,
-          'Download failed: $e',
+          'DET download failed: $e\n'
+          'You can also place ${PpOcrModelManager.detOnnxName} manually '
+          'in Documents/Pdf Power/Models/',
           isError: true,
         );
       }
@@ -467,26 +472,95 @@ class _PaddleModelSheetState extends State<_PaddleModelSheet> {
       if (mounted) {
         setState(() {
           _busy = false;
-          _progress.remove(q);
+          _detProgress = -1;
         });
         await _refresh();
       }
     }
   }
 
-  Future<void> _downloadMmproj() async {
+  Future<void> _downloadRec() async {
     setState(() {
       _busy = true;
-      _mmProgress = 0;
+      _recProgress = 0;
     });
     try {
-      await PaddleModelManager.downloadMmproj(
+      await PpOcrModelManager.downloadRec(
         onProgress: (p) {
-          if (mounted) setState(() => _mmProgress = p);
+          if (mounted) setState(() => _recProgress = p);
         },
       );
       if (mounted) {
-        PdfFilePicker.showResult(context, 'mmproj downloaded');
+        PdfFilePicker.showResult(context, 'REC model downloaded');
+      }
+    } catch (e) {
+      if (mounted) {
+        PdfFilePicker.showResult(
+          context,
+          'REC download failed: $e\n'
+          'Place ${PpOcrModelManager.recOnnxName} manually if needed.',
+          isError: true,
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _recProgress = -1;
+        });
+        await _refresh();
+      }
+    }
+  }
+
+  Future<void> _downloadDict() async {
+    setState(() {
+      _busy = true;
+      _dictProgress = 0;
+    });
+    try {
+      await PpOcrModelManager.downloadDict(
+        onProgress: (p) {
+          if (mounted) setState(() => _dictProgress = p);
+        },
+      );
+      if (mounted) {
+        PdfFilePicker.showResult(context, 'Dictionary downloaded');
+      }
+    } catch (e) {
+      if (mounted) {
+        PdfFilePicker.showResult(
+          context,
+          'Dict download failed: $e',
+          isError: true,
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _busy = false;
+          _dictProgress = -1;
+        });
+        await _refresh();
+      }
+    }
+  }
+
+  Future<void> _downloadAll() async {
+    setState(() => _busy = true);
+    try {
+      await PpOcrModelManager.downloadAll(
+        onProgress: (stage, p) {
+          if (!mounted) return;
+          setState(() {
+            if (stage == 'det') _detProgress = p;
+            if (stage == 'rec') _recProgress = p;
+            if (stage == 'dict') _dictProgress = p;
+          });
+        },
+      );
+      if (mounted) {
+        PdfFilePicker.showResult(context, 'All PP-OCR models downloaded');
       }
     } catch (e) {
       if (mounted) {
@@ -496,18 +570,69 @@ class _PaddleModelSheetState extends State<_PaddleModelSheet> {
       if (mounted) {
         setState(() {
           _busy = false;
-          _mmProgress = -1;
+          _detProgress = -1;
+          _recProgress = -1;
+          _dictProgress = -1;
         });
         await _refresh();
       }
     }
   }
 
+  Future<void> _deleteAll() async {
+    await PpOcrModelManager.deleteAll();
+    await PpOcr.unload();
+    await _refresh();
+    if (mounted) {
+      PdfFilePicker.showResult(context, 'PP-OCR models deleted');
+    }
+  }
+
+  Widget _modelTile({
+    required String title,
+    required String subtitle,
+    required bool installed,
+    required double progress,
+    required VoidCallback onDownload,
+    required VoidCallback onDelete,
+  }) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      title: Text(title),
+      subtitle: Text(
+        installed ? 'Installed' : subtitle,
+        style: TextStyle(
+          fontSize: 12,
+          color: installed ? Colors.greenAccent.withOpacity(0.8) : Colors.white54,
+        ),
+      ),
+      trailing: progress >= 0
+          ? SizedBox(
+              width: 36,
+              height: 36,
+              child: CircularProgressIndicator(
+                value: progress > 0 ? progress : null,
+                strokeWidth: 3,
+              ),
+            )
+          : installed
+              ? IconButton(
+                  icon: const Icon(Icons.delete_outline),
+                  onPressed: _busy ? null : onDelete,
+                )
+              : TextButton(
+                  onPressed: _busy ? null : onDownload,
+                  child: const Text('Get'),
+                ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final allReady = _det && _rec && _dict;
     return DraggableScrollableSheet(
       expand: false,
-      initialChildSize: 0.7,
+      initialChildSize: 0.65,
       maxChildSize: 0.92,
       minChildSize: 0.4,
       builder: (_, controller) {
@@ -527,7 +652,7 @@ class _PaddleModelSheetState extends State<_PaddleModelSheet> {
             ),
             const Gap(16),
             Text(
-              'PaddleOCR-VL-1.6 Models',
+              'PP-OCR Models',
               style: GoogleFonts.inter(
                 fontSize: 18,
                 fontWeight: FontWeight.w600,
@@ -535,83 +660,89 @@ class _PaddleModelSheetState extends State<_PaddleModelSheet> {
             ),
             const Gap(6),
             Text(
-              'Optional advanced OCR (not in APK).\n'
-              'Q4+mmproj ≈ 1.1 GB. Stored in Documents/Pdf Power/Models/.',
+              'Pipeline: PP-OCRv6 Medium DET → devanagari_PP-OCRv5_mobile_rec\n'
+              'Hindi + English + Numbers · Offline · ~${PpOcrModelManager.detSizeMbApprox + PpOcrModelManager.recSizeMbApprox} MB total\n'
+              'Stored in Documents/Pdf Power/Models/',
               style: GoogleFonts.inter(fontSize: 12, color: Colors.white54),
             ),
+            const Gap(8),
+            Text(
+              'Used: ${_fmtMb(_usedBytes)}  ·  Status: ${allReady ? "Ready" : "Incomplete"}',
+              style: GoogleFonts.inter(
+                fontSize: 12,
+                color: allReady ? Colors.greenAccent : Colors.orangeAccent,
+              ),
+            ),
             const Gap(16),
-            // Shared mmproj
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Shared mmproj (~841 MB)'),
-              subtitle: Text(_mmproj ? 'Installed' : 'PaddleOCR-VL-1.6-mmproj.gguf · required'),
-              trailing: _mmProgress >= 0
-                  ? SizedBox(
-                      width: 36,
-                      height: 36,
-                      child: CircularProgressIndicator(
-                        value: _mmProgress > 0 ? _mmProgress : null,
-                        strokeWidth: 3,
-                      ),
-                    )
-                  : _mmproj
-                      ? IconButton(
-                          icon: const Icon(Icons.delete_outline),
-                          onPressed: _busy
-                              ? null
-                              : () async {
-                                  await PaddleModelManager.deleteMmproj();
-                                  await _refresh();
-                                },
-                        )
-                      : TextButton(
-                          onPressed: _busy ? null : _downloadMmproj,
-                          child: const Text('Download'),
-                        ),
+            _modelTile(
+              title: 'Detection · PP-OCRv6 Medium DET',
+              subtitle: '${PpOcrModelManager.detOnnxName} · ~${PpOcrModelManager.detSizeMbApprox} MB',
+              installed: _det,
+              progress: _detProgress,
+              onDownload: _downloadDet,
+              onDelete: () async {
+                final f = File(await PpOcrModelManager.detPath());
+                if (await f.exists()) await f.delete();
+                await _refresh();
+              },
             ),
             const Divider(color: Colors.white12),
-            ...PaddleQuant.values.map((q) {
-              final inst = _installed[q] == true;
-              final prog = _progress[q];
-              return RadioListTile<PaddleQuant>(
-                value: q,
-                groupValue: _selected,
-                activeColor: const Color(0xFF42A5F5),
-                title: Text('${q.label}  ·  ${q.sizeMb} MB'),
-                subtitle: Text(inst ? 'Installed' : 'Not installed'),
-                secondary: prog != null
-                    ? SizedBox(
-                        width: 32,
-                        height: 32,
-                        child: CircularProgressIndicator(
-                          value: prog > 0 ? prog : null,
-                          strokeWidth: 3,
-                        ),
-                      )
-                    : inst
-                        ? IconButton(
-                            icon: const Icon(Icons.delete_outline, size: 20),
-                            onPressed: _busy
-                                ? null
-                                : () async {
-                                    await PaddleModelManager.deleteQuant(q);
-                                    await _refresh();
-                                  },
-                          )
-                        : TextButton(
-                            onPressed:
-                                _busy ? null : () => _downloadQuant(q),
-                            child: const Text('Get'),
-                          ),
-                onChanged: inst
-                    ? (v) async {
-                        if (v == null) return;
-                        await PaddleModelManager.setSelectedQuant(v);
-                        setState(() => _selected = v);
-                      }
-                    : null,
-              );
-            }),
+            _modelTile(
+              title: 'Recognition · Devanagari PP-OCRv5 Mobile',
+              subtitle: '${PpOcrModelManager.recOnnxName} · ~${PpOcrModelManager.recSizeMbApprox} MB',
+              installed: _rec,
+              progress: _recProgress,
+              onDownload: _downloadRec,
+              onDelete: () async {
+                final f = File(await PpOcrModelManager.recPath());
+                if (await f.exists()) await f.delete();
+                await _refresh();
+              },
+            ),
+            const Divider(color: Colors.white12),
+            _modelTile(
+              title: 'Dictionary · Devanagari',
+              subtitle: PpOcrModelManager.recDictName,
+              installed: _dict,
+              progress: _dictProgress,
+              onDownload: _downloadDict,
+              onDelete: () async {
+                final f = File(await PpOcrModelManager.dictPath());
+                if (await f.exists()) await f.delete();
+                await _refresh();
+              },
+            ),
+            const Gap(20),
+            if (!allReady)
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _busy ? null : _downloadAll,
+                  icon: const Icon(Icons.download),
+                  label: const Text('Download All'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF1565C0),
+                  ),
+                ),
+              ),
+            if (allReady || _det || _rec || _dict) ...[
+              const Gap(8),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _busy ? null : _deleteAll,
+                  icon: const Icon(Icons.delete_forever_outlined),
+                  label: const Text('Delete All Models'),
+                ),
+              ),
+            ],
+            const Gap(12),
+            Text(
+              'Note: Official ONNX exports may use different filenames. '
+              'Models are ONNX files for the Android ONNX Runtime engine. '
+              'You can also place compatible ONNX files manually in the Models folder.',
+              style: GoogleFonts.inter(fontSize: 11, color: Colors.white38),
+            ),
           ],
         );
       },
