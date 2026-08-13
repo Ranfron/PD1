@@ -2,7 +2,9 @@ name: Build APK (arm64-v8a)
 
 on:
   push:
-    branches: [ main, master ]
+    branches:
+      - main
+      - master
   pull_request:
   workflow_dispatch:
 
@@ -10,14 +12,16 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 60
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 17
+          java-version: "17"
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -26,23 +30,18 @@ jobs:
           channel: stable
           cache: true
 
-      - name: Ensure Android SDK 36
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Accept Android SDK licenses
+        shell: bash
         run: |
-          export ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-$HOME/Android/Sdk}}"
-export ANDROID_HOME="$ANDROID_SDK_ROOT"
-SDKMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
-if [ ! -x "$SDKMANAGER" ]; then
-  SDKMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/bin/sdkmanager"
-fi
-if [ ! -x "$SDKMANAGER" ]; then
-  SDKMANAGER="$(find "$ANDROID_SDK_ROOT/cmdline-tools" -type f -name sdkmanager -print -quit 2>/dev/null || true)"
-fi
-if [ -x "$SDKMANAGER" ]; then
-  yes | "$SDKMANAGER" --licenses >/dev/null || true
-else
-  echo "sdkmanager not found; continuing because the GitHub runner may already have accepted SDK licenses."
-fi
-          "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0"
+          yes | sdkmanager --licenses >/dev/null || true
+
+      - name: Install Android SDK 36
+        shell: bash
+        run: |
+          sdkmanager "platforms;android-36" "build-tools;36.0.0"
 
       - name: Flutter pub get
         run: flutter pub get
@@ -51,7 +50,7 @@ fi
         run: flutter build apk --release --target-platform android-arm64
 
       - name: List APKs
-        run: find build -name "*.apk" -type f
+        run: find build -name "*.apk" -type f -print
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
