@@ -28,8 +28,21 @@ jobs:
 
       - name: Ensure Android SDK 36
         run: |
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "platforms;android-36" "build-tools;36.0.0"
+          export ANDROID_SDK_ROOT="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-$HOME/Android/Sdk}}"
+export ANDROID_HOME="$ANDROID_SDK_ROOT"
+SDKMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager"
+if [ ! -x "$SDKMANAGER" ]; then
+  SDKMANAGER="$ANDROID_SDK_ROOT/cmdline-tools/bin/sdkmanager"
+fi
+if [ ! -x "$SDKMANAGER" ]; then
+  SDKMANAGER="$(find "$ANDROID_SDK_ROOT/cmdline-tools" -type f -name sdkmanager -print -quit 2>/dev/null || true)"
+fi
+if [ -x "$SDKMANAGER" ]; then
+  yes | "$SDKMANAGER" --licenses >/dev/null || true
+else
+  echo "sdkmanager not found; continuing because the GitHub runner may already have accepted SDK licenses."
+fi
+          "$SDKMANAGER" "platforms;android-36" "build-tools;36.0.0"
 
       - name: Flutter pub get
         run: flutter pub get
