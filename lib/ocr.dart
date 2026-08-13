@@ -29,7 +29,7 @@ class _OcrPageState extends State<OcrPage> {
   bool _ppOcrReady = false;
 
   final TextRecognizer _recognizer =
-      TextRecognizer(script: TextRecognitionScript.latin);
+      TextRecognizer(script: TextRecognitionScript.devanagiri);
 
   @override
   void initState() {

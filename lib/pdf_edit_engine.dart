@@ -168,7 +168,7 @@ class PdfEditEngine {
   final List<_EditOp> _redo = [];
   File? _document;
   final TextRecognizer _mlkit =
-      TextRecognizer(script: TextRecognitionScript.latin);
+      TextRecognizer(script: TextRecognitionScript.devanagiri);
 
   double defaultPageWidth = 595;
   double defaultPageHeight = 842;

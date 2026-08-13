@@ -72,6 +72,7 @@ flutter {
 }
 
 dependencies {
+    implementation 'com.google.mlkit:text-recognition-devanagari:16.0.1'
     implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
     // MuPDF
     implementation 'com.artifex.mupdf:fitz:1.28.0'

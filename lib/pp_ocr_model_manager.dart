@@ -26,9 +26,9 @@ class PpOcrModelManager {
   static const detUrl =
       'https://huggingface.co/PaddlePaddle/PP-OCRv6_medium_det_onnx/resolve/main/inference.onnx';
   static const recUrl =
-      'https://huggingface.co/OllmOne/PP-OCRv5/resolve/main/devanagari_pp-ocrv5_mobile_rec.onnx';
+      'https://raw.githubusercontent.com/PT-Perkasa-Pilar-Utama/ppu-paddle-ocr-models/main/recognition/multi/devanagari/v5/devanagari_PP-OCRv5_mobile_rec_infer.onnx';
   static const dictUrl =
-      'https://huggingface.co/OllmOne/PP-OCRv5/resolve/main/ppocrv5_devanagari_dict.txt';
+      'https://raw.githubusercontent.com/PT-Perkasa-Pilar-Utama/ppu-paddle-ocr-models/main/recognition/multi/devanagari/v5/ppocrv5_devanagari_dict.txt';
 
   static Future<Directory> modelsDir() => AppStorage.modelsDir();
 

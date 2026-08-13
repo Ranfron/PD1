@@ -298,20 +298,15 @@ class PpOcrEngine {
         val e = env ?: return "" to 0f
         if (crop.width < 2 || crop.height < 2) return "" to 0f
 
-        val resized = resizeRec(crop)
-        val input = bitmapToNCHW(
-            resized,
-            mean = floatArrayOf(0.5f, 0.5f, 0.5f),
-            std = floatArrayOf(0.5f, 0.5f, 0.5f),
-            bgr = true
-        )
-        val shape = longArrayOf(1, 3, REC_IMG_H.toLong(), resized.width.toLong())
+        val (resized, contentW) = resizeRec(crop)
+        val input = recBitmapToPaddedNCHW(resized, contentW)
+        val shape = longArrayOf(1, 3, REC_IMG_H.toLong(), REC_MAX_W.toLong())
         val tensor = OnnxTensor.createTensor(e, FloatBuffer.wrap(input), shape)
         val inputName = session.inputNames.iterator().next()
         val results = session.run(mapOf(inputName to tensor))
         tensor.close()
         val out = results[0].value
-        Log.d(TAG, "REC output=${describeTensor(out)} input=${resized.width}x${resized.height}")
+        Log.d(TAG, "REC output=${describeTensor(out)} input=${REC_IMG_H}x${REC_MAX_W} contentW=${contentW}")
         results.close()
         if (!resized.isRecycled && resized !== crop) resized.recycle()
 
@@ -343,7 +338,7 @@ class PpOcrEngine {
             val matrix = raw as Array<FloatArray>
             if (matrix.isEmpty()) return "" to 0f
 
-            val classCount = charset.size + 1 // dictionary + CTC blank
+            val classCount = charset.size + 1 // CTC blank (0) + dictionary
             val rows = matrix.size
             val cols = matrix[0].size
 
@@ -353,14 +348,8 @@ class PpOcrEngine {
                     FloatArray(rows) { c -> matrix[c][t] }   // [C,T] -> [T,C]
                 }
                 else -> {
-                    // Some exporters expose an equivalent tensor with a small
-                    // class-count discrepancy. Prefer the dimension closest to
-                    // the expected CTC class count.
-                    if (kotlin.math.abs(cols - classCount) <= kotlin.math.abs(rows - classCount)) {
-                        matrix
-                    } else {
-                        Array(cols) { t -> FloatArray(rows) { c -> matrix[c][t] } }
-                    }
+                    Log.e(TAG, "Unexpected REC output shape rows=$rows cols=$cols classCount=$classCount")
+                    return "" to 0f
                 }
             }
 
@@ -419,19 +408,42 @@ class PpOcrEngine {
         return Bitmap.createScaledBitmap(src, nw, nh, true) to ratio
     }
 
-    private fun resizeRec(src: Bitmap): Bitmap {
-        // Official devanagari_PP-OCRv5_mobile_rec inference shape is [3, 48, 320].
-        // Keep the text aspect ratio, then right-pad with white pixels.
+    private fun resizeRec(src: Bitmap): Pair<Bitmap, Int> {
+        // PaddleOCR RecResizeImg: height=48, preserve aspect ratio,
+        // cap width at 320, then pad the NORMALIZED tensor with zeros.
         val h = REC_IMG_H
         val scale = h.toFloat() / src.height.coerceAtLeast(1)
-        val resizedW = (src.width * scale).roundToInt().coerceAtLeast(1)
-        val contentW = min(REC_MAX_W, resizedW)
-
+        val contentW = min(
+            REC_MAX_W,
+            (src.width * scale).roundToInt().coerceAtLeast(1)
+        )
         val scaled = Bitmap.createScaledBitmap(src, contentW, h, true)
-        val out = Bitmap.createBitmap(REC_MAX_W, h, Bitmap.Config.ARGB_8888)
-        out.eraseColor(android.graphics.Color.WHITE)
-        Canvas(out).drawBitmap(scaled, 0f, 0f, null)
-        if (scaled !== src && !scaled.isRecycled) scaled.recycle()
+        return scaled to contentW
+    }
+
+    private fun recBitmapToPaddedNCHW(bmp: Bitmap, contentW: Int): FloatArray {
+        val out = FloatArray(3 * REC_IMG_H * REC_MAX_W)
+        val pixels = IntArray(contentW * REC_IMG_H)
+        bmp.getPixels(pixels, 0, contentW, 0, 0, contentW, REC_IMG_H)
+        val area = REC_IMG_H * REC_MAX_W
+
+        for (y in 0 until REC_IMG_H) {
+            for (x in 0 until contentW) {
+                val p = pixels[y * contentW + x]
+                val r = ((p shr 16) and 0xFF) / 255f
+                val g = ((p shr 8) and 0xFF) / 255f
+                val b = (p and 0xFF) / 255f
+
+                // PaddleOCR DecodeImage uses BGR. NormalizeImage is:
+                // img = img / 255; img = (img - 0.5) / 0.5.
+                val i = y * REC_MAX_W + x
+                out[i] = (b - 0.5f) / 0.5f
+                out[area + i] = (g - 0.5f) / 0.5f
+                out[2 * area + i] = (r - 0.5f) / 0.5f
+            }
+        }
+        // Remaining width is already zero, exactly matching PaddleOCR's
+        // post-normalization padding_im = np.zeros(...).
         return out
     }
 
