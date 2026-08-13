@@ -314,7 +314,7 @@ class MuPdfBridge : MethodChannel.MethodCallHandler {
         for (p in start until end) {
             val pageObj = src.findPage(p)
             val cur = pageObj.get("Rotate")
-            val prev = if (cur != null && !cur.isNull && cur.isNumber) cur.asNumber().toInt() else 0
+            val prev = if (cur != null && !cur.isNull && cur.isNumber) cur.asFloat().toInt() else 0
             pageObj.put("Rotate", (prev + rot) % 360)
         }
         src.save(outPath, "compress")
@@ -325,7 +325,9 @@ class MuPdfBridge : MethodChannel.MethodCallHandler {
         val srcDoc = Document.openDocument(path)
         val src = srcDoc as? PDFDocument ?: throw Exception("Not a PDF")
         // addPage creates the page object; insertPage puts it into the page tree.
-        val mediabox = src.findPage(0).bounds
+        val firstPage = src.loadPage(0)
+        val mediabox = firstPage.getBounds()
+        firstPage.destroy()
         val resources = src.newDictionary()
         val newPage = src.addPage(mediabox, 0, resources, "")
         val insertAt = if (index < 0) -1 else index.coerceIn(0, src.countPages())
