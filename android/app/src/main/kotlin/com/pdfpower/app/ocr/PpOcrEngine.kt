@@ -67,7 +67,9 @@ class PpOcrEngine {
             charset = File(dictPath).readLines()
                 .map { it.trimEnd('\r') }
                 .filter { it.isNotEmpty() }
-            // PaddleOCR CTCLabelDecode uses the class after the dictionary as blank.
+                .toMutableList()
+                .also { chars -> if (chars.lastOrNull() != " ") chars.add(" ") }
+            // PaddleOCR CTCLabelDecode uses class 0 as blank; dictionary characters start at class 1.
             require(charset.isNotEmpty()) { "Recognition dictionary is empty" }
             env = e
             ready = true
@@ -370,25 +372,39 @@ class PpOcrEngine {
     }
 
     private fun decodeSteps(steps: Array<FloatArray>): Pair<String, Float> {
+        // PaddleOCR CTCLabelDecode reserves class 0 for CTC blank.
+        // Dictionary character N is model class N+1.
+        // Using the blank as the last class shifts every character by one.
+        val blank = 0
         val sb = StringBuilder()
-        val blank = charset.size
         var last = blank
         var confSum = 0f
         var confN = 0
+
         for (row in steps) {
             if (row.isEmpty()) continue
+
             var maxI = 0
             var maxV = row[0]
             for (c in 1 until row.size) {
-                if (row[c] > maxV) { maxV = row[c]; maxI = c }
+                if (row[c] > maxV) {
+                    maxV = row[c]
+                    maxI = c
+                }
             }
-            if (maxI != blank && maxI != last && maxI < charset.size) {
-                sb.append(charset[maxI])
-                confSum += maxV
-                confN++
+
+            // CTC: remove blank and consecutive duplicate labels.
+            if (maxI != blank && maxI != last) {
+                val dictIndex = maxI - 1
+                if (dictIndex >= 0 && dictIndex < charset.size) {
+                    sb.append(charset[dictIndex])
+                    confSum += maxV
+                    confN++
+                }
             }
             last = maxI
         }
+
         return sb.toString() to if (confN > 0) confSum / confN else 0f
     }
 
