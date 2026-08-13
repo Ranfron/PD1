@@ -109,13 +109,15 @@ class ScannerBridge : MethodChannel.MethodCallHandler {
                 val modeStr = call.argument<String>("mode") ?: "document"
                 val mode = if (modeStr == "card") ScanMode.CARD else ScanMode.DOCUMENT
                 executor.execute {
-                    val stable = try {
-                        val bmp = BitmapFactory.decodeFile(path) ?: return@execute main.post {
-                            result.success(false)
+                    val stable: Boolean = try {
+                        val bmp = BitmapFactory.decodeFile(path)
+                        if (bmp == null) {
+                            false
+                        } else {
+                            val quad = detector.detect(bmp, mode)
+                            if (!bmp.isRecycled) bmp.recycle()
+                            autoCapture.onDetection(quad)
                         }
-                        val quad = detector.detect(bmp, mode)
-                        if (!bmp.isRecycled) bmp.recycle()
-                        autoCapture.onDetection(quad)
                     } catch (_: Throwable) {
                         false
                     }

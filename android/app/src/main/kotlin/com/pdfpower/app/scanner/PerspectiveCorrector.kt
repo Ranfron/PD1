@@ -51,7 +51,7 @@ object PerspectiveCorrector {
             val transform = Imgproc.getPerspectiveTransform(srcPts, dstPts)
             val warped = Mat()
             Imgproc.warpPerspective(mat, warped, transform, Size(outW.toDouble(), outH.toDouble()), Imgproc.INTER_CUBIC)
-            val encoded = Mat()
+            val encoded = org.opencv.core.MatOfByte()
             Imgcodecs.imencode(".jpg", warped, encoded, org.opencv.core.MatOfInt(Imgcodecs.IMWRITE_JPEG_QUALITY, 95))
             val data = ByteArray(encoded.total().toInt())
             encoded.get(0, 0, data)
