@@ -1,0 +1,68 @@
+name: pdf_power_app
+description: Advanced Full Offline PDF Editor - MuPDF + OCR powered
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.12.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Core UI
+  cupertino_icons: ^1.0.9
+  google_fonts: ^8.2.1
+  flutter_animate: ^4.5.2
+  gap: ^3.0.1
+
+  # File & Storage (fully offline)
+  file_picker: ^11.0.2
+  path_provider: ^2.1.6
+  path: ^1.9.1
+  shared_preferences: ^2.5.5
+  permission_handler: ^12.0.3
+  share_plus: ^12.0.2
+  open_filex: ^4.7.0
+
+  # PDF Viewing & Rendering
+  pdfrx: ^1.0.101
+  pdf: ^3.12.0
+  printing: ^5.15.0
+
+  # Image & Conversion helpers
+  image: ^4.9.1
+  flutter_image_compress: ^2.5.1
+
+  # OCR (on-device via ML Kit - fully offline after model download)
+  google_mlkit_text_recognition: ^0.16.0
+
+  # Utilities
+  intl: ^0.20.3
+  uuid: ^4.6.0
+  collection: ^1.19.1
+  archive: ^4.0.9
+  http: ^1.6.0
+  camera: ^0.12.0+2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/
+
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/icon.png"
+  adaptive_icon_background: "#0D47A1"
+  # A dedicated, inset (transparent-padded) layer. Reusing the same
+  # full-bleed image for both the legacy icon AND the adaptive foreground
+  # makes Android's circular/squircle mask crop the design on real devices —
+  # this file keeps the glyph within the safe zone so nothing gets clipped.
+  adaptive_icon_foreground: "assets/icon_foreground.png"

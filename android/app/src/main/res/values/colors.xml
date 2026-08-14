@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Adaptive-icon background layer. Matches the app's own brand blue
+         (see pubspec.yaml flutter_launcher_icons.adaptive_icon_background). -->
+    <color name="ic_launcher_background">#0D47A1</color>
+</resources>
